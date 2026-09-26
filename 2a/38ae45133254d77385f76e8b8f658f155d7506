@@ -1,0 +1,21 @@
+scripts/collect_sources.py
+  s_98e2f9d3718976::t_3a0d1878d47052 56
+scripts/release_test.py
+  s_98e2f9d3718976::t_3a0d1878d47052 19,22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2a38ae45133254d77385f76e8b8f658f155d7506",
+  "prompts": {},
+  "sessions": {
+    "s_98e2f9d3718976": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0de1c-f60f-7532-955b-c2055985637e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Ben Hale <nebhale@nebhale.com>"
+    }
+  }
+}
