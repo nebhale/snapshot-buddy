@@ -98,7 +98,7 @@ async function poll() {
         const card = document.querySelector(`[data-printer="${p.printer.id}"]`);
         if (!card) continue;
         const state = card.querySelector('[data-role="state"]');
-        state.textContent = p.active ? "Capturing" : p.suppressed ? "Closed manually" : "Waiting";
+        state.textContent = p.active ? "Active" : p.suppressed ? "Closed manually" : "Waiting";
         state.classList.toggle("active", Boolean(p.active));
         const name = card.querySelector('[data-role="name"]');
         if (p.active) {
@@ -106,10 +106,10 @@ async function poll() {
           link.href = `/sessions/${p.active.id}`;
           link.textContent = localizedSessionName(p.active);
           name.replaceChildren(link);
-        } else name.textContent = "Ready for the next print";
-        card.querySelector('[data-role="count"]').textContent = p.active ? `${p.active.frame_count} frames saved` : p.printer.id;
+        } else name.textContent = "No active session";
+        card.querySelector('[data-role="count"]').textContent = p.active ? `${p.active.frame_count} snapshots saved` : p.printer.id;
         card.querySelector('[data-role="error"]').textContent = p.last_error || "";
-        card.querySelector('[data-role="suppression"]').textContent = p.suppressed ? "Layer messages are ignored until a new START or service restart." : "";
+        card.querySelector('[data-role="suppression"]').textContent = p.suppressed ? "LAYER markers are ignored until a new START marker or application restart." : "";
         renderTimestamp(card.querySelector('[data-role="received"]'), p.last_event);
       }
     } catch {
