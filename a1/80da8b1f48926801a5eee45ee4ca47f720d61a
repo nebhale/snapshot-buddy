@@ -1,0 +1,39 @@
+CHANGELOG.md
+  s_98e2f9d3718976::t_a8e496a7fb4869 3-10
+README.md
+  s_98e2f9d3718976::t_121e3d1ad7efea 131,133,144,146,157,159,180,185,191,200-202
+internal/buddy/buddy_test.go
+  s_98e2f9d3718976::t_ec723e9c7ebd7f 129,170,174-175,177,180,185,192-194,198-200,206,208,215,244-248,250,275,280,282,286,305,314,316,337,341,347-383,387,393,527,547,562,566-567,586,610,627,705,765,776,778,780-781,878
+internal/buddy/config.go
+  s_98e2f9d3718976::t_cfaee06cfbb89e 21,123
+internal/buddy/protocol.go
+  s_98e2f9d3718976::t_6b054bda3fcf94 14-15,37,56-65,68-69,72,83-95,107,124
+internal/buddy/service.go
+  s_98e2f9d3718976::t_efaf083bbeb846 132
+internal/buddy/store.go
+  s_98e2f9d3718976::t_c5df055494d812 73,103-106,206,209
+internal/buddy/video_test.go
+  s_98e2f9d3718976::t_29ae7f59647bca 33,71,138,148,195
+internal/buddy/web/pages.html
+  s_98e2f9d3718976::t_88546e6bd1b72c 18,24
+internal/buddy/web_media_test.go
+  s_98e2f9d3718976::t_f5afd301c66249 41
+scripts/demo/main.go
+  s_98e2f9d3718976::t_ef4c59c9e55e46 69,82,87,91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "a180da8b1f48926801a5eee45ee4ca47f720d61a",
+  "prompts": {},
+  "sessions": {
+    "s_98e2f9d3718976": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0de1c-f60f-7532-955b-c2055985637e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Ben Hale <nebhale@nebhale.com>"
+    }
+  }
+}
