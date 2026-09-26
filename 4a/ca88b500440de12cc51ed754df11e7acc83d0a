@@ -1,0 +1,21 @@
+README.md
+  s_6951ea044cc556::t_583e473d93edc8 180-183
+config.example.yaml
+  s_6951ea044cc556::t_818192d658a6c1 9,28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "4aca88b500440de12cc51ed754df11e7acc83d0a",
+  "prompts": {},
+  "sessions": {
+    "s_6951ea044cc556": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0df56-a69c-72f0-a594-861396bfdcb6",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Ben Hale <nebhale@nebhale.com>"
+    }
+  }
+}
