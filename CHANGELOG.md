@@ -4,8 +4,6 @@
 
 - Allow generated G-code to target a separate `metrics.advertised_port`,
   defaulting to the application's UDP listening port.
-- Add a separate samplicator deployment for sharing printer metrics with
-  Filament Buddy, including source filtering and relay verification.
 
 - Match Filament Buddy’s slicer filename check, using `Print` for names that
   cannot fit safely in the firmware’s 47-byte metric value.

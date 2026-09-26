@@ -1,3 +1,0 @@
-# Accept only the printer's reserved LAN address. Copy to samplicator.conf.
-# No sampling: every accepted datagram goes intact to both consumers.
-192.168.1.42: 127.0.0.1/18514 127.0.0.1/18515
