@@ -7,6 +7,8 @@
   printer IDs and print names.
 - Continue accepting legacy `SNAPSHOT_BUDDY_V1` and `FRAME` markers from
   already-sliced files.
+- Derive Alpine source archives from the built runtime version so release
+  notices remain aligned when the base image changes.
 
 ## 1.0.0
 

@@ -51,6 +51,17 @@ def archive_path(output):
     return Path(str(output) + ".tar.gz")
 
 
+def alpine_branch(records):
+    for package in records:
+        if package.get("P") != "alpine-base":
+            continue
+        match = re.match(r"^(\d+)\.(\d+)(?:\.\d+)?-r\d+$", package.get("V", ""))
+        if match:
+            return f"v{match.group(1)}.{match.group(2)}"
+        break
+    raise ValueError("Cannot determine Alpine release branch from inventory")
+
+
 def source_checksums(recipe):
     # APKBUILD permits both one-line quoted and multiline checksum lists.
     return re.findall(rb'''(?<![a-f0-9])([a-f0-9]{128})[ \t]+([^\s"']+)''', recipe)
@@ -58,6 +69,7 @@ def source_checksums(recipe):
 
 def collect(inventory, output, branch):
     records = packages(inventory.read_text())
+    branch = branch or alpine_branch(records)
     output.mkdir(parents=True, exist_ok=True)
     (output / "packages.json").write_text(json.dumps(records, indent=2) + "\n")
     origins = {}
@@ -123,7 +135,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("inventory", type=Path)
     parser.add_argument("output", type=Path)
-    parser.add_argument("--branch", default="v3.23")
+    parser.add_argument("--branch")
     args = parser.parse_args()
     collect(args.inventory, args.output, args.branch)
     archive = archive_path(args.output)
