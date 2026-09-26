@@ -5,6 +5,7 @@ http:
 
 metrics:
   address: ":8514"
+  # advertised_port: 8514 # optional relay port; defaults to the listening port
   advertised_host: "192.168.1.50" # dockerpi's LAN IP, used in generated G-code
 
 go2rtc:
