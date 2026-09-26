@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Match Filament Buddy’s slicer filename check, using `Print` for names that
+  cannot fit safely in the firmware’s 47-byte metric value.
+
 - Strengthen START and STOP delivery with three markers spaced 1.1 seconds
   apart and a restart-persistent five-second deduplication window. Layer
   markers retain their two copies and 100 ms spacing. Update the Start and

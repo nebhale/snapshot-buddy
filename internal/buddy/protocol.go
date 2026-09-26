@@ -120,10 +120,12 @@ func GCode(c Config, p Printer) Snippets {
 		label := "Snapshot Buddy: " + purpose + " (" + p.ID + ")"
 		return "; BEGIN " + label + "\n" + commands + "\n; END " + label
 	}
+	// ASCII makes the character limit equal the firmware's 47-byte limit.
+	name := fmt.Sprintf("{if input_filename_base =~ /^[a-zA-Z0-9 _.-]{1,%d}$/}{input_filename_base}{else}Print{endif}", 47-len(markerPrefix+"START "+p.ID+" "))
 	// Spread lifecycle retries beyond the firmware's one-second metrics
 	// batching interval, while keeping the existing layer pacing unchanged.
 	return Snippets{
-		Start: labeled("start session", fmt.Sprintf("M334 %s %s 13514\n", c.Metrics.AdvertisedHost, port)+block(markerPrefix+"START "+p.ID+" {input_filename_base}", false, 3, 1100)),
+		Start: labeled("start session", fmt.Sprintf("M334 %s %s 13514\n", c.Metrics.AdvertisedHost, port)+block(markerPrefix+"START "+p.ID+" "+name, false, 3, 1100)),
 		Layer: labeled("layer snapshot", block(markerPrefix+"LAYER "+p.ID+" {layer_num}", true, 2, 100)),
 		Stop:  labeled("final snapshot and close session", block(markerPrefix+"STOP "+p.ID+" {total_layer_count}", true, 3, 1100)),
 	}
