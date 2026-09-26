@@ -66,7 +66,7 @@ func main() {
 	}
 	at := time.Now().UTC()
 	event := func(payload string) {
-		e, err := buddy.ParseMarker("M118 SNAPSHOT_BUDDY_V1 " + payload)
+		e, err := buddy.ParseMarker("M118 SB1 " + payload)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -79,16 +79,16 @@ func main() {
 	for _, name := range []string{"Gridfinity tool organizer", "Camera mounting bracket", "Spiral desk planter"} {
 		event("START core-one " + name)
 		for i := 1; i <= 8; i++ {
-			event(fmt.Sprintf("FRAME core-one %d", i))
+			event(fmt.Sprintf("LAYER core-one %d", i))
 		}
 		event("STOP core-one 9")
 		at = at.Add(2 * time.Hour)
 	}
-	event("FRAME core-one 42")
+	event("LAYER core-one 42")
 	event("STOP core-one 43")
 	event("START core-one Workshop parts tray")
 	for i := 1; i <= 4; i++ {
-		event(fmt.Sprintf("FRAME core-one %d", i))
+		event(fmt.Sprintf("LAYER core-one %d", i))
 	}
 	buddy.NewVideos(service).Start(context.Background())
 	h, err := buddy.NewWeb(service)

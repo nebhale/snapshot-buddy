@@ -38,7 +38,7 @@ func TestVideoDownloadIntent(t *testing.T) {
 	}
 	now := time.Now()
 	handle(t, s, "START core-one Workshop parts tray", now)
-	handle(t, s, "FRAME core-one 1", now)
+	handle(t, s, "LAYER core-one 1", now)
 	id := active(t, s, "core-one").ID
 	h, err := NewWeb(s)
 	if err != nil {

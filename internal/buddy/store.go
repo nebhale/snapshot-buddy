@@ -70,7 +70,7 @@ func (s *Store) initialize() error {
 	if err := s.db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
 		return err
 	}
-	if version > 1 {
+	if version > 2 {
 		return fmt.Errorf("database schema %d is newer than this application supports", version)
 	}
 	_, err := s.db.Exec(`
@@ -100,7 +100,10 @@ CREATE TABLE IF NOT EXISTS jobs (
  created_at TEXT NOT NULL, manifest TEXT NOT NULL,
  UNIQUE(session_id, revision, duration_ms)
 );
-PRAGMA user_version=1;
+UPDATE captures SET kind='LAYER' WHERE kind='FRAME';
+UPDATE recent_events SET kind='LAYER' WHERE kind='FRAME';
+UPDATE sessions SET opened_by='layer' WHERE opened_by='frame';
+PRAGMA user_version=2;
 UPDATE sessions SET revision=revision+1 WHERE id IN (SELECT session_id FROM captures WHERE status='pending');
 UPDATE captures SET status='failed', error='Application stopped before capture was committed; no later frame substituted' WHERE status='pending';
 UPDATE jobs SET state='queued', progress=0, error='' WHERE state='running';
@@ -200,10 +203,10 @@ func (s *Store) Apply(ctx context.Context, e Event) (*Capture, string, error) {
 		sessionID = newID()
 		name, openedBy := e.Name, "start"
 		var first any
-		recovered := e.Kind == "FRAME"
+		recovered := e.Kind == "LAYER"
 		if recovered {
 			name = "Recovered print — " + e.ReceivedAt.UTC().Format("2006-01-02 15:04:05 UTC")
-			openedBy = "frame"
+			openedBy = "layer"
 			first = e.Layer
 		}
 		_, err = tx.Exec(`INSERT INTO sessions(id,printer_id,name,state,opened_at,recovered,opened_by,first_layer,source_ip,initial_marker) VALUES(?,?,?,'active',?,?,?,?,?,?)`, sessionID, e.PrinterID, name, stamp(e.ReceivedAt), recovered, openedBy, first, e.SourceIP, e.Raw)

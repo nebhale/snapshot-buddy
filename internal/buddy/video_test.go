@@ -30,7 +30,7 @@ func requireFFmpeg(t *testing.T) {
 
 func TestVideoOutputCannotEscapeDataDirectory(t *testing.T) {
 	s, _ := testService(t)
-	handle(t, s, "FRAME core-one 1", time.Now())
+	handle(t, s, "LAYER core-one 1", time.Now())
 	j, err := s.RequestVideo(active(t, s, "core-one").ID, 15000)
 	if err != nil {
 		t.Fatal(err)
@@ -68,7 +68,7 @@ func TestVideoTimingOrderingAndNormalization(t *testing.T) {
 			colors := []color.RGBA{{R: 255, A: 255}, {G: 255, A: 255}, {B: 255, A: 255}}
 			for i := 0; i < tc.count; i++ {
 				cam.image = testJPEG(t, 63+(i%2)*9, 47+(i%2)*7, colors[i%3])
-				handle(t, s, fmt.Sprintf("FRAME core-one %d", i+1), now.Add(time.Duration(i)*time.Millisecond))
+				handle(t, s, fmt.Sprintf("LAYER core-one %d", i+1), now.Add(time.Duration(i)*time.Millisecond))
 			}
 			ss := active(t, s, "core-one")
 			j, err := s.RequestVideo(ss.ID, tc.ms)
@@ -135,7 +135,7 @@ func TestVideoTimingOrderingAndNormalization(t *testing.T) {
 func TestVideoSnapshotCacheAndRecovery(t *testing.T) {
 	s, _ := testService(t)
 	now := time.Now()
-	handle(t, s, "FRAME core-one 1", now)
+	handle(t, s, "LAYER core-one 1", now)
 	ss := active(t, s, "core-one")
 	j, err := s.RequestVideo(ss.ID, 15000)
 	if err != nil {
@@ -145,7 +145,7 @@ func TestVideoSnapshotCacheAndRecovery(t *testing.T) {
 	if err != nil || cached.ID != j.ID {
 		t.Fatal("did not reuse identical export")
 	}
-	handle(t, s, "FRAME core-one 2", now.Add(time.Second))
+	handle(t, s, "LAYER core-one 2", now.Add(time.Second))
 	if len(j.Manifest.Frames()) != 1 {
 		t.Fatal("job's frame list mutated")
 	}
@@ -192,7 +192,7 @@ func TestVideoSnapshotCacheAndRecovery(t *testing.T) {
 func TestVideoWorkerAndFailedEncode(t *testing.T) {
 	requireFFmpeg(t)
 	s, _ := testService(t)
-	handle(t, s, "FRAME core-one 1", time.Now())
+	handle(t, s, "LAYER core-one 1", time.Now())
 	ss := active(t, s, "core-one")
 	j, err := s.RequestVideo(ss.ID, 1000)
 	if err != nil {
