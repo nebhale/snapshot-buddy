@@ -1,0 +1,35 @@
+name: Bug report
+description: Report a reproducible problem
+body:
+  - type: markdown
+    attributes:
+      value: "For vulnerabilities, use private security reporting instead. Remove credentials, private camera URLs, network addresses, and personal images."
+  - type: input
+    id: version
+    attributes:
+      label: Snapshot Buddy version
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Host architecture, browser, go2rtc version, printer firmware, and slicer.
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs or configuration
+      render: text

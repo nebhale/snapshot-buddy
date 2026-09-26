@@ -1,0 +1,10 @@
+.git
+.github
+.cache
+bin
+data
+config.yaml
+.env
+coverage.out
+*.tar
+*.mp4

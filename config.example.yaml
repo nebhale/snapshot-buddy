@@ -1,0 +1,27 @@
+# Copy to config.yaml and change the receiver address and go2rtc stream names.
+# Configuration is read at startup. Unknown fields are rejected.
+http:
+  address: ":8080"
+
+metrics:
+  address: ":8514"
+  advertised_host: "192.168.1.50" # dockerpi's LAN IP, used in generated G-code
+
+go2rtc:
+  url: "http://go2rtc:1984" # reachable from inside the Snapshot Buddy container
+
+capture:
+  timeout: 5s # per attempt
+  attempts: 2
+
+video:
+  workers: 1 # each encoder uses two threads
+  default_duration_seconds: 10
+
+data_dir: /data
+
+printers:
+  - id: core-one # 1–9 lowercase letters/digits, hyphens or underscores
+    name: "Prusa CORE One"
+    stream: "buddy3d" # an existing named go2rtc stream, not a WebRTC URL
+    source_ip: "192.168.1.42" # optional; printer's LAN IP

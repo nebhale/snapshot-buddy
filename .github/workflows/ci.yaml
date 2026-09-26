@@ -1,0 +1,77 @@
+name: Verify
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  source:
+    name: Source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: test -z "$(gofmt -l cmd internal scripts)"
+      - run: go vet ./...
+      - run: go test -race -count=1 -timeout=5m ./...
+        env:
+          REQUIRE_FFMPEG: "1"
+      - run: node --test internal/buddy/testdata/*.test.cjs
+      - run: python3 -m unittest discover -s scripts -p '*_test.py'
+  containers:
+    name: Containers (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          platforms: linux/${{ matrix.arch }}
+          load: true
+          tags: snapshot-buddy:test
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,scope=${{ matrix.arch }},mode=max
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          target: test
+          platforms: linux/${{ matrix.arch }}
+          load: true
+          tags: snapshot-buddy:integration
+          cache-from: type=gha,scope=${{ matrix.arch }}
+      - name: Test bundled runtime and encoder
+        run: docker run --rm snapshot-buddy:integration -test.timeout=5m
+      - name: Check image and health endpoint
+        run: |
+          docker run --rm snapshot-buddy:test -version
+          docker run --rm --entrypoint ffmpeg snapshot-buddy:test -version
+          docker run -d --name snapshot-buddy-smoke -p 127.0.0.1:18080:8080 -v "$PWD/config.example.yaml:/config/config.yaml:ro" snapshot-buddy:test
+          for i in $(seq 1 30); do
+            if curl --fail http://127.0.0.1:18080/healthz; then break; fi
+            sleep 1
+          done
+          curl --fail http://127.0.0.1:18080/healthz
+          curl --fail http://127.0.0.1:18080/setup
+          test "$(docker exec snapshot-buddy-smoke id -u)" = 10001
+      - if: always()
+        run: |
+          docker logs snapshot-buddy-smoke || true
+          docker rm -f -v snapshot-buddy-smoke || true

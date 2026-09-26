@@ -1,0 +1,11 @@
+# docker compose -f compose.yaml -f compose.network.yaml up -d
+# The existing go2rtc service must also be attached to this network.
+services:
+  snapshot-buddy:
+    networks:
+      - cameras
+
+networks:
+  cameras:
+    external: true
+    name: "${CAMERA_NETWORK:-cameras}"

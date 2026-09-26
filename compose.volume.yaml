@@ -1,0 +1,9 @@
+# Optional: docker compose -f compose.yaml -f compose.volume.yaml up -d
+services:
+  snapshot-buddy:
+    volumes:
+      - type: volume
+        source: snapshot-buddy-data
+        target: /data
+volumes:
+  snapshot-buddy-data:

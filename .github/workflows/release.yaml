@@ -1,0 +1,133 @@
+name: Publish containers
+on:
+  release:
+    types: [published]
+concurrency:
+  group: release-publication
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  verify:
+    uses: ./.github/workflows/ci.yaml
+  build:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      IMAGE: ghcr.io/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - name: Validate release version
+        run: python3 scripts/release_tags.py "$RELEASE_TAG" --validate
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          platforms: linux/${{ matrix.arch }}
+          load: true
+          tags: snapshot-buddy:release
+          build-args: VERSION=${{ github.event.release.tag_name }}
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,scope=release-${{ matrix.arch }},mode=max
+      - name: Collect exact third-party sources and notices
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release-assets
+          docker run --rm --network none --entrypoint cat snapshot-buddy:release /lib/apk/db/installed > release-assets/installed-${{ matrix.arch }}.txt
+          python3 scripts/collect_sources.py release-assets/installed-${{ matrix.arch }}.txt "release-assets/sources-$RELEASE_TAG-${{ matrix.arch }}"
+          docker run --rm --network none snapshot-buddy:release -version | grep -Fx "$RELEASE_TAG"
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push verified architecture by digest only
+        id: image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          platforms: linux/${{ matrix.arch }}
+          outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
+          build-args: VERSION=${{ github.event.release.tag_name }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.event.release.tag_name }}
+            org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.description=Layer snapshots and timelapses; bundled dependencies retain their own licenses
+          sbom: true
+          provenance: mode=max
+          cache-from: type=gha,scope=release-${{ matrix.arch }}
+      - name: Record image digest
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: printf '%s\n' "$IMAGE@$DIGEST" > release-assets/digest-${{ matrix.arch }}.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-${{ matrix.arch }}
+          path: |
+            release-assets/*.tar.gz
+            release-assets/*.sha256
+            release-assets/*.txt
+          retention-days: 7
+          if-no-files-found: error
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      IS_PRERELEASE: ${{ github.event.release.prerelease }}
+      IMAGE: ghcr.io/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release-assets
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish source material before image tags
+        run: |
+          (cd release-assets && sha256sum -c ./*.sha256)
+          gh release upload "$RELEASE_TAG" release-assets/*.tar.gz release-assets/*.sha256 release-assets/installed-*.txt --clobber
+      - name: Publish multi-architecture image
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases" --jq '.[] | {tag_name,prerelease,draft}' | jq -s . > release-assets/releases.json
+          latest="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name 2>/dev/null || true)"
+          python3 scripts/release_tags.py "$RELEASE_TAG" --latest "$latest" --prerelease "$IS_PRERELEASE" --releases release-assets/releases.json > release-assets/tags.txt
+          if docker buildx imagetools inspect "$IMAGE:${RELEASE_TAG#v}" >/dev/null 2>&1; then
+            echo "This version already has an image. Refusing to overwrite it."
+            exit 1
+          fi
+          args=()
+          while IFS= read -r tag; do args+=(--tag "$IMAGE:$tag"); done < release-assets/tags.txt
+          mapfile -t images < <(cat release-assets/digest-*.txt)
+          test "${#images[@]}" = 2
+          docker buildx imagetools create "${args[@]}" "${images[@]}"
+          docker buildx imagetools inspect "$IMAGE:${RELEASE_TAG#v}"

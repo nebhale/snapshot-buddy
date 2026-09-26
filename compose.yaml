@@ -1,0 +1,21 @@
+services:
+  snapshot-buddy:
+    image: ghcr.io/nebhale/snapshot-buddy:1.0.0
+    restart: unless-stopped
+    init: true
+    ports:
+      - "8080:8080/tcp"
+      - "8514:8514/udp"
+    environment:
+      SNAPSHOT_BUDDY_AUTH_USER: "${SNAPSHOT_BUDDY_AUTH_USER:-}"
+      SNAPSHOT_BUDDY_AUTH_PASSWORD: "${SNAPSHOT_BUDDY_AUTH_PASSWORD:-}"
+    volumes:
+      - ./config.yaml:/config/config.yaml:ro
+      - type: bind
+        source: ./data
+        target: /data
+        bind:
+          create_host_path: false
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    stop_grace_period: 20s

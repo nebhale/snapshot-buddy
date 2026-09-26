@@ -1,0 +1,10 @@
+/data/
+/config.yaml
+/.cache/
+/bin/
+/coverage.out
+/.env
+*.test
+.DS_Store
+__pycache__/
+*.pyc
