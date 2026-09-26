@@ -1,7 +1,7 @@
 import unittest
 from release_tags import tags, version
 from pathlib import Path
-from collect_sources import archive_path, packages, source_checksums
+from collect_sources import alpine_branch, archive_path, packages, source_checksums
 
 
 class ReleaseTests(unittest.TestCase):
@@ -14,6 +14,12 @@ class ReleaseTests(unittest.TestCase):
         for arch in ("amd64", "arm64"):
             name = f"sources-v1.0.0-{arch}"
             self.assertEqual(str(archive_path(Path(name))), name + ".tar.gz")
+
+    def test_alpine_branch_follows_inventory(self):
+        records = packages("P:alpine-base\nV:3.24.2-r0\n")
+        self.assertEqual(alpine_branch(records), "v3.24")
+        with self.assertRaises(ValueError):
+            alpine_branch(packages("P:alpine-base\nV:edge\n"))
 
     def test_initial(self):
         self.assertEqual(tags("v1.0.0", False, "v1.0.0", []), ["1.0.0", "1.0", "latest"])
