@@ -1,0 +1,66 @@
+config.example.yaml
+  s_685b18b9b367ae::t_ff9fe7afa8bd50 9,28
+  s_6951ea044cc556::t_19f502541f1850 8
+deploy/samplicator/README.md
+  s_6951ea044cc556::t_5fb3e80e293a2a 58,64,67-73,87,96-99
+  s_685b18b9b367ae::t_ff9fe7afa8bd50 1-4,12-31,33-35,37-38,46-57,59-63,65-66,74-86,88-95,100-114
+  s_685b18b9b367ae::t_b32697a62b9783 5-11,32,36,42-44
+  s_685b18b9b367ae::t_1c87bd0736d910 39-41,45
+deploy/samplicator/compose.yaml
+  s_685b18b9b367ae::t_b32697a62b9783 5-6
+  s_685b18b9b367ae::t_ff9fe7afa8bd50 1-4,7-20
+deploy/samplicator/.env.example
+  s_685b18b9b367ae::t_ff9fe7afa8bd50 1
+deploy/samplicator/samplicator.conf.example
+  s_685b18b9b367ae::t_ff9fe7afa8bd50 1-3
+.github/workflows/ci.yaml
+  s_6951ea044cc556::t_5fb3e80e293a2a 43-46
+deploy/samplicator/verify.py
+  s_685b18b9b367ae::t_b32697a62b9783 1,3,23-30,44,48
+  s_685b18b9b367ae::t_a7dd0fd0a42c37 2,4-22,31-43,45-47,49-94
+README.md
+  s_9aaaa9b35e31f7::t_a95a528b71b033 180-184
+  s_6951ea044cc556::t_a516e886d77ab5 283
+CHANGELOG.md
+  s_6951ea044cc556::t_5fb3e80e293a2a 5-9
+deploy/samplicator/.gitignore
+  s_685b18b9b367ae::t_ff9fe7afa8bd50 1-2
+internal/buddy/advertised_port_test.go
+  s_6951ea044cc556::t_9351ee75c70de0 1-33
+internal/buddy/config.go
+  s_6951ea044cc556::t_db4cf0955b8f51 37,101-107
+internal/buddy/protocol.go
+  s_6951ea044cc556::t_e934d591093dcf 111-113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "08758913de6b4a286ea1be13f87a3640da220ac4",
+  "prompts": {},
+  "sessions": {
+    "s_685b18b9b367ae": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0df5a-e1fd-7362-b9ae-da6d609a8121",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Ben Hale <nebhale@nebhale.com>"
+    },
+    "s_6951ea044cc556": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0df56-a69c-72f0-a594-861396bfdcb6",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Ben Hale <nebhale@nebhale.com>"
+    },
+    "s_9aaaa9b35e31f7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0d6bb-dd41-70b1-aa02-e4910c2fab7f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Ben Hale <nebhale@nebhale.com>"
+    }
+  }
+}
