@@ -108,6 +108,9 @@ type Snippets struct{ Start, Layer, Stop string }
 
 func GCode(c Config, p Printer) Snippets {
 	_, port, _ := net.SplitHostPort(c.Metrics.Address)
+	if c.Metrics.AdvertisedPort != 0 {
+		port = strconv.Itoa(c.Metrics.AdvertisedPort)
+	}
 	block := func(command string, wait bool, copies, delayMS int) string {
 		prefix := ""
 		if wait {

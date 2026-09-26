@@ -177,6 +177,11 @@ use UDP 8514; Snapshot Buddy does not need to expose the accompanying log port
 13514. The printer has a single metrics destination, so changing it can affect
 another metrics collector. See [Prusa's metrics documentation](https://github.com/prusa3d/Prusa-Firmware-Buddy/blob/master/doc/metrics.md).
 
+To share the stream with Filament Buddy, use the
+[samplicator Docker deployment](deploy/samplicator/README.md). It keeps the
+printer-facing endpoint on UDP 8514 and forwards copies to separate localhost
+ports for each application, preserving existing sliced files.
+
 `M400` waits for queued motion. Layer numbers are preserved exactly as sent by
 the slicer; an after-layer-change marker is a transition identifier, not proof that the
 upcoming layer has already been extruded. STOP supplies a separate final frame.
@@ -275,6 +280,7 @@ remains in the library.
 | `http.address` | `:8080` |
 | `metrics.address` | `:8514` (UDP) |
 | `metrics.advertised_host` | Required receiver LAN IP for slicer snippets |
+| `metrics.advertised_port` | Optional relay destination port; defaults to the UDP listening port |
 | `go2rtc.url` | Required HTTP(S) base URL; can contain upstream Basic credentials |
 | `capture.timeout` | `5s` per attempt; range 100ms–1m |
 | `capture.attempts` | `2`; range 1–5, 100ms between attempts |

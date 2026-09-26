@@ -34,6 +34,7 @@ type Config struct {
 	Metrics struct {
 		Address        string `yaml:"address"`
 		AdvertisedHost string `yaml:"advertised_host"`
+		AdvertisedPort int    `yaml:"advertised_port"`
 	} `yaml:"metrics"`
 	Go2RTC struct {
 		URL string `yaml:"url"`
@@ -96,6 +97,13 @@ func DecodeConfig(r io.Reader) (Config, error) {
 		if err != nil || n < 1 || n > 65535 {
 			return c, fmt.Errorf("invalid listen port %q", port)
 		}
+	}
+	if c.Metrics.AdvertisedPort == 0 {
+		_, port, _ := net.SplitHostPort(c.Metrics.Address)
+		c.Metrics.AdvertisedPort, _ = strconv.Atoi(port)
+	}
+	if c.Metrics.AdvertisedPort < 1 || c.Metrics.AdvertisedPort > 65535 {
+		return c, errors.New("metrics.advertised_port must be 1–65535")
 	}
 	if _, err := netip.ParseAddr(c.Metrics.AdvertisedHost); err != nil {
 		return c, errors.New("metrics.advertised_host must be the receiver's LAN IP address")

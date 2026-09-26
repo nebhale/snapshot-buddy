@@ -5,7 +5,8 @@ http:
 
 metrics:
   address: ":8514"
-  advertised_host: "192.168.1.50" # dockerpi's LAN IP, used in generated G-code
+  # advertised_port: 8514 # optional relay port; defaults to the listening port
+  advertised_host: "192.168.1.50" # dockerpi's LAN IP (relay IP when sharing metrics)
 
 go2rtc:
   url: "http://go2rtc:1984" # reachable from inside the Snapshot Buddy container
@@ -24,4 +25,4 @@ printers:
   - id: core-one # 1–9 lowercase letters/digits, hyphens or underscores
     name: "Prusa CORE One"
     stream: "buddy3d" # an existing named go2rtc stream, not a WebRTC URL
-    source_ip: "192.168.1.42" # optional; printer's LAN IP
+    source_ip: "192.168.1.42" # optional; observed UDP sender (see deploy/samplicator)
