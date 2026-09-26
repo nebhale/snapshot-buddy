@@ -107,7 +107,7 @@ async function poll() {
           link.textContent = localizedSessionName(p.active);
           name.replaceChildren(link);
         } else name.textContent = "No active session";
-        card.querySelector('[data-role="count"]').textContent = p.active ? `${p.active.frame_count} snapshots saved` : p.printer.id;
+        card.querySelector('[data-role="count"]').textContent = p.active ? `${p.active.frame_count} snapshots saved` : "";
         card.querySelector('[data-role="error"]').textContent = p.last_error || "";
         card.querySelector('[data-role="suppression"]').textContent = p.suppressed ? "LAYER markers are ignored until a new START marker or application restart." : "";
         renderTimestamp(card.querySelector('[data-role="received"]'), p.last_event);
