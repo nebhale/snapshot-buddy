@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Strengthen START and STOP delivery with three markers spaced 1.1 seconds
+  apart and a restart-persistent five-second deduplication window. Layer
+  markers retain their two copies and 100 ms spacing. Update the Start and
+  End slicer blocks after upgrading; existing sliced files are unchanged.
+
 ## 1.1.0
 
 - Shorten generated markers to `SB1` and rename the layer notification from

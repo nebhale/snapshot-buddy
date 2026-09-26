@@ -564,8 +564,12 @@ func TestSourceGuardAndGCode(t *testing.T) {
 	}
 	codes := GCode(s.Config, s.Config.Printers[0])
 	for i, code := range []string{codes.Start, codes.Layer, codes.Stop} {
-		if strings.Count(code, "M118 SB1") != 2 || !strings.Contains(code, "G4 P100") {
-			t.Fatal("missing redundant marker")
+		copies, delay := 3, "G4 P1100\n"
+		if i == 1 {
+			copies, delay = 2, "G4 P100\n"
+		}
+		if strings.Count(code, "M118 SB1") != copies || strings.Count(code, delay) != copies-1 || strings.Count(code, "G4 ") != copies-1 {
+			t.Fatalf("incorrect retry count or timing: %s", code)
 		}
 		var commands []string
 		for _, line := range strings.Split(code, "\n") {

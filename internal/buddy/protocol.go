@@ -108,20 +108,23 @@ type Snippets struct{ Start, Layer, Stop string }
 
 func GCode(c Config, p Printer) Snippets {
 	_, port, _ := net.SplitHostPort(c.Metrics.Address)
-	block := func(command string, wait bool) string {
+	block := func(command string, wait bool, copies, delayMS int) string {
 		prefix := ""
 		if wait {
 			prefix = "M400\n"
 		}
-		return prefix + "M331 gcode\n" + command + "\nG4 P100\n" + command + "\nM332 gcode"
+		retry := fmt.Sprintf("\nG4 P%d\n%s", delayMS, command)
+		return prefix + "M331 gcode\n" + command + strings.Repeat(retry, copies-1) + "\nM332 gcode"
 	}
 	labeled := func(purpose, commands string) string {
 		label := "Snapshot Buddy: " + purpose + " (" + p.ID + ")"
 		return "; BEGIN " + label + "\n" + commands + "\n; END " + label
 	}
+	// Spread lifecycle retries beyond the firmware's one-second metrics
+	// batching interval, while keeping the existing layer pacing unchanged.
 	return Snippets{
-		Start: labeled("start session", fmt.Sprintf("M334 %s %s 13514\n", c.Metrics.AdvertisedHost, port)+block(markerPrefix+"START "+p.ID+" {input_filename_base}", false)),
-		Layer: labeled("layer snapshot", block(markerPrefix+"LAYER "+p.ID+" {layer_num}", true)),
-		Stop:  labeled("final snapshot and close session", block(markerPrefix+"STOP "+p.ID+" {total_layer_count}", true)),
+		Start: labeled("start session", fmt.Sprintf("M334 %s %s 13514\n", c.Metrics.AdvertisedHost, port)+block(markerPrefix+"START "+p.ID+" {input_filename_base}", false, 3, 1100)),
+		Layer: labeled("layer snapshot", block(markerPrefix+"LAYER "+p.ID+" {layer_num}", true, 2, 100)),
+		Stop:  labeled("final snapshot and close session", block(markerPrefix+"STOP "+p.ID+" {total_layer_count}", true, 3, 1100)),
 	}
 }
