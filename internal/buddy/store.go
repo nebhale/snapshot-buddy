@@ -180,7 +180,13 @@ func (s *Store) Apply(ctx context.Context, e Event) (*Capture, string, error) {
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, "", err
 	}
-	if err == nil && raw == e.Raw && e.ReceivedAt.Sub(parseTime(received)) >= 0 && e.ReceivedAt.Sub(parseTime(received)) < 2*time.Second {
+	duplicateWindow := 2 * time.Second
+	if e.Kind == "START" || e.Kind == "STOP" {
+		// Lifecycle retries span 2.2 seconds. Keep the whole burst harmless,
+		// with room for delivery jitter, without changing layer handling.
+		duplicateWindow = 5 * time.Second
+	}
+	if err == nil && raw == e.Raw && e.ReceivedAt.Sub(parseTime(received)) >= 0 && e.ReceivedAt.Sub(parseTime(received)) < duplicateWindow {
 		return nil, "duplicate", nil
 	}
 	var sessionID string

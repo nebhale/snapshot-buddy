@@ -129,7 +129,9 @@ At the **end of Start G-code**:
 M334 192.168.1.50 8514 13514
 M331 gcode
 M118 SB1 START core-one {input_filename_base}
-G4 P100
+G4 P1100
+M118 SB1 START core-one {input_filename_base}
+G4 P1100
 M118 SB1 START core-one {input_filename_base}
 M332 gcode
 ; END Snapshot Buddy: start session (core-one)
@@ -142,7 +144,9 @@ At the **beginning of End G-code**:
 M400
 M331 gcode
 M118 SB1 STOP core-one {total_layer_count}
-G4 P100
+G4 P1100
+M118 SB1 STOP core-one {total_layer_count}
+G4 P1100
 M118 SB1 STOP core-one {total_layer_count}
 M332 gcode
 ; END Snapshot Buddy: final snapshot and close session (core-one)
@@ -171,6 +175,15 @@ another metrics collector. See [Prusa's metrics documentation](https://github.co
 the slicer; an after-layer-change marker is a transition identifier, not proof that the
 upcoming layer has already been extruded. STOP supplies a separate final frame.
 
+START and STOP each send three copies, 1.1 seconds apart, adding 2.2 seconds
+at each boundary. The wider spacing reduces the chance of all retries sharing
+one firmware metrics packet. Layer timing stays lightweight: two copies,
+100 ms apart. This favors reliable session boundaries without adding more
+waiting between layers. Replace the Start and End blocks and re-slice to use
+the stronger retries; already-sliced files keep their original timing.
+Upgrade Snapshot Buddy before using these blocks so it can deduplicate the
+longer retry burst.
+
 ## Sessions and recovery
 
 The web interface displays timestamps in the browser's locale and time zone,
@@ -198,13 +211,14 @@ video jobs return to the queue with their original fixed frame lists.
 
 The receiver parses both Prusa's `gcode v="…"` metrics and bare markers for
 diagnostics. It also accepts the legacy `SNAPSHOT_BUDDY_V1` marker and
-normalizes legacy `FRAME` events to `LAYER`. Identical lifecycle messages
-received within two seconds are
-deduplicated across restarts. Layer numbers are deduplicated for the entire
+normalizes legacy `FRAME` events to `LAYER`. Identical START and STOP messages
+received within five seconds of the first accepted copy are deduplicated
+across restarts. Repeats do not extend this window; a new START with a different
+name is processed immediately. Layer numbers are deduplicated for the entire
 session, including out-of-order repeats and failed captures. A two-second
 duplicate window also prevents a trailing repeated layer marker from reviving
 a just-completed session. This is UDP, not a guaranteed-delivery protocol: if
-both copies are lost, or packets arrive long after a new print starts, the
+all copies are lost, or packets arrive long after a new print starts, the
 service cannot infer the missing print identity. Failures and gaps remain
 visible instead of being filled with an older preview.
 
