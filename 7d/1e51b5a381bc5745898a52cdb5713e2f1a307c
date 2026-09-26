@@ -1,0 +1,31 @@
+internal/buddy/protocol.go
+  s_9aaaa9b35e31f7::t_61135b56e87b8f 111,116-117,123-124,126-128
+internal/buddy/store.go
+  s_9aaaa9b35e31f7::t_61135b56e87b8f 183-189
+internal/buddy/web/pages.html
+  s_9aaaa9b35e31f7::t_61135b56e87b8f 25
+internal/buddy/buddy_test.go
+  s_9aaaa9b35e31f7::t_61135b56e87b8f 567-572
+internal/buddy/lifecycle_retry_test.go
+  s_9aaaa9b35e31f7::t_61135b56e87b8f 1-152
+README.md
+  s_9aaaa9b35e31f7::t_61135b56e87b8f 132-134,147-149,178-186,214-217,221
+CHANGELOG.md
+  s_9aaaa9b35e31f7::t_61135b56e87b8f 3-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "7d1e51b5a381bc5745898a52cdb5713e2f1a307c",
+  "prompts": {},
+  "sessions": {
+    "s_9aaaa9b35e31f7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0d6bb-dd41-70b1-aa02-e4910c2fab7f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Ben Hale <nebhale@nebhale.com>"
+    }
+  }
+}
