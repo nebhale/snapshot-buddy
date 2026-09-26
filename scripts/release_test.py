@@ -16,10 +16,10 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(str(archive_path(Path(name))), name + ".tar.gz")
 
     def test_alpine_branch_follows_inventory(self):
-        records = packages("P:alpine-base\nV:3.24.2-r0\n")
+        records = packages("P:alpine-release\nV:3.24.2-r0\no:alpine-base\n")
         self.assertEqual(alpine_branch(records), "v3.24")
         with self.assertRaises(ValueError):
-            alpine_branch(packages("P:alpine-base\nV:edge\n"))
+            alpine_branch(packages("P:alpine-release\nV:edge\n"))
 
     def test_initial(self):
         self.assertEqual(tags("v1.0.0", False, "v1.0.0", []), ["1.0.0", "1.0", "latest"])

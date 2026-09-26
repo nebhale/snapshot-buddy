@@ -53,7 +53,7 @@ def archive_path(output):
 
 def alpine_branch(records):
     for package in records:
-        if package.get("P") != "alpine-base":
+        if package.get("P") != "alpine-release":
             continue
         match = re.match(r"^(\d+)\.(\d+)(?:\.\d+)?-r\d+$", package.get("V", ""))
         if match:
