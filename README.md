@@ -120,7 +120,13 @@ previous timelapse integration blocks when switching to Snapshot Buddy.
 Each block includes BEGIN/END comments identifying Snapshot Buddy, the action,
 and the printer ID, so it is easy to find in a larger custom G-code field.
 Field names and placeholder syntax vary between slicers; adapt the filename
-and layer placeholders below to the equivalents supported by your slicer.
+check and layer placeholders below to the equivalents supported by your slicer.
+
+Both Buddy apps use the same filename check: letters, digits, spaces, underscores,
+periods, and hyphens are retained when the complete START marker fits the
+firmware’s 47-byte metric limit. Longer names or names with other characters
+use `Print`; the session timestamp helps distinguish prints with that fallback.
+The generated maximum filename length accounts for the configured printer ID.
 
 At the **end of Start G-code**:
 
@@ -128,11 +134,11 @@ At the **end of Start G-code**:
 ; BEGIN Snapshot Buddy: start session (core-one)
 M334 192.168.1.50 8514 13514
 M331 gcode
-M118 SB1 START core-one {input_filename_base}
+M118 SB1 START core-one {if input_filename_base =~ /^[a-zA-Z0-9 _.-]{1,23}$/}{input_filename_base}{else}Print{endif}
 G4 P1100
-M118 SB1 START core-one {input_filename_base}
+M118 SB1 START core-one {if input_filename_base =~ /^[a-zA-Z0-9 _.-]{1,23}$/}{input_filename_base}{else}Print{endif}
 G4 P1100
-M118 SB1 START core-one {input_filename_base}
+M118 SB1 START core-one {if input_filename_base =~ /^[a-zA-Z0-9 _.-]{1,23}$/}{input_filename_base}{else}Print{endif}
 M332 gcode
 ; END Snapshot Buddy: start session (core-one)
 ```
