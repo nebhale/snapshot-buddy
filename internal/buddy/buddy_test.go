@@ -126,7 +126,7 @@ printers: [{id: core-one, stream: camera}]`
 		{"unknown field", valid + "\nunknown: 1"},
 		{"duplicate ID", strings.Replace(valid, "stream: camera}]", "stream: camera}, {id: core-one, stream: other}]", 1)},
 		{"bad ID", strings.Replace(valid, "core-one", "../../outside", 1)},
-		{"ID exceeds firmware buffer", strings.Replace(valid, "core-one", "1234567890", 1)},
+		{"ID exceeds firmware buffer", strings.Replace(valid, "core-one", "123456789012345678901234", 1)},
 		{"source IP", strings.Replace(valid, "stream: camera", "stream: camera, source_ip: nope", 1)},
 		{"stream URL", strings.Replace(valid, "stream: camera", "stream: 'rtsp://camera/live'", 1)},
 		{"bad scheme", strings.Replace(valid, "http://go2rtc:1984", "file:///tmp/camera", 1)},
@@ -167,48 +167,52 @@ printers: [{id: core-one, stream: camera}]`
 }
 
 func TestPacketParser(t *testing.T) {
-	packet := `<14>1 2026-09-25T01:00:00Z printer buddy - - - gcode v="M118 SNAPSHOT_BUDDY_V1 START core-one Gearbox cover" 42
+	packet := `<14>1 2026-09-25T01:00:00Z printer buddy - - - gcode v="M118 SB1 START core-one Gearbox cover" 42
 gcode v="M118 SNAPSHOT_BUDDY_V1 FRAME core-one 12" 43
 temp v=210 43
 gcode v="G1 X0 Y0" 44
-gcode v="M118 SNAPSHOT_BUDDY_V1 STOP core-one 20" 45
-M118 SNAPSHOT_BUDDY_V1 FRAME mini 8`
+gcode v="M118 SB1 STOP core-one 20" 45
+M118 SB1 LAYER mini 8`
 	events := ParsePacket([]byte(packet), "127.0.0.1", time.Now())
-	if len(events) != 4 || events[0].Name != "Gearbox cover" || events[1].Layer != 12 || events[3].PrinterID != "mini" {
+	if len(events) != 4 || events[0].Name != "Gearbox cover" || events[1].Kind != "LAYER" || events[1].Layer != 12 || events[3].PrinterID != "mini" {
 		t.Fatalf("events: %+v", events)
 	}
-	for _, bad := range []string{"M118 BUDDY_TIMELAPSE_LAYER:1", markerPrefix + "FRAME ../x 3", markerPrefix + "FRAME core-one -1", markerPrefix + "FRAME core-one 2junk", markerPrefix + "FRAME core-one 9999999999999999", markerPrefix + "FRAME core-one 1\x00", markerPrefix + "UNKNOWN core-one x", markerPrefix + "START core-one ", markerPrefix + "START core-one " + strings.Repeat("x", 1024)} {
+	for _, bad := range []string{"M118 BUDDY_TIMELAPSE_LAYER:1", markerPrefix + "FRAME core-one 1", legacyMarkerPrefix + "LAYER core-one 1", markerPrefix + "LAYER ../x 3", markerPrefix + "LAYER core-one -1", markerPrefix + "LAYER core-one 2junk", markerPrefix + "LAYER core-one 9999999999999999", markerPrefix + "LAYER core-one 1\x00", markerPrefix + "UNKNOWN core-one x", markerPrefix + "START core-one ", markerPrefix + "START core-one " + strings.Repeat("x", 1024)} {
 		if _, err := ParseMarker(bad); err == nil {
 			t.Fatalf("accepted %q", bad)
 		}
 	}
-	if got := ParsePacket([]byte(`log message="M118 SNAPSHOT_BUDDY_V1 FRAME core-one 1"`), "127.0.0.1", time.Now()); len(got) != 0 {
+	if got := ParsePacket([]byte(`log message="M118 SB1 LAYER core-one 1"`), "127.0.0.1", time.Now()); len(got) != 0 {
 		t.Fatal("matched unrelated metric")
 	}
 }
 
 func TestFirmwareMetricLimit(t *testing.T) {
 	const capacity = 47
-	for _, kind := range []string{"FRAME", "STOP"} {
-		command := markerPrefix + kind + " 123456789 10000000"
+	const longestID = "12345678901234567890123"
+	for _, kind := range []string{"LAYER", "STOP"} {
+		command := markerPrefix + kind + " " + longestID + " 10000000"
 		if len(command) > capacity {
 			t.Fatalf("%s marker exceeds firmware buffer: %d", kind, len(command))
+		}
+		if kind == "LAYER" && len(command) != capacity {
+			t.Fatalf("LAYER marker should use the full firmware buffer: %d", len(command))
 		}
 		events := ParsePacket([]byte(`gcode v="`+command+`" 123`), "127.0.0.1", time.Now())
 		if len(events) != 1 || events[0].Layer != 10000000 {
 			t.Fatalf("lost layer: %+v", events)
 		}
 	}
-	command := (markerPrefix + "START core-one Gearbox cover")[:capacity]
+	command := (markerPrefix + "START " + longestID + " Gearbox cover")[:capacity]
 	events := ParsePacket([]byte(`gcode v="`+command+`" 123`), "127.0.0.1", time.Now())
-	if len(events) != 1 || events[0].Name != "Gearbox c" {
+	if len(events) != 1 || events[0].Name != "Gearbox" {
 		t.Fatalf("lost truncated name: %+v", events)
 	}
 }
 
 func TestDeletionDoesNotQueueBehindExport(t *testing.T) {
 	s, _ := testService(t)
-	handle(t, s, "FRAME core-one 1", time.Now())
+	handle(t, s, "LAYER core-one 1", time.Now())
 	id := active(t, s, "core-one").ID
 	if err := s.CloseSession(id); err != nil {
 		t.Fatal(err)
@@ -237,13 +241,13 @@ func TestSessionLifecycle(t *testing.T) {
 	if first.Recovered {
 		t.Fatal("named session marked recovered")
 	}
-	handle(t, s, "FRAME core-one 12", now)
-	handle(t, s, "FRAME core-one 12", now.Add(100*time.Millisecond))
-	handle(t, s, "FRAME core-one 13", now.Add(200*time.Millisecond))
-	handle(t, s, "FRAME core-one 12", now.Add(3*time.Second)) // out of order duplicate
-	handle(t, s, "FRAME mini 99", now)
+	handle(t, s, "LAYER core-one 12", now)
+	handle(t, s, "LAYER core-one 12", now.Add(100*time.Millisecond))
+	handle(t, s, "LAYER core-one 13", now.Add(200*time.Millisecond))
+	handle(t, s, "LAYER core-one 12", now.Add(3*time.Second)) // out of order duplicate
+	handle(t, s, "LAYER mini 99", now)
 	mini := active(t, s, "mini")
-	if !mini.Recovered || mini.FirstLayer == nil || *mini.FirstLayer != 99 || mini.OpenedBy != "frame" {
+	if !mini.Recovered || mini.FirstLayer == nil || *mini.FirstLayer != 99 || mini.OpenedBy != "layer" {
 		t.Fatalf("recovered: %+v", mini)
 	}
 	handle(t, s, "STOP core-one 14", now.Add(4*time.Second))
@@ -268,18 +272,18 @@ func TestSessionLifecycle(t *testing.T) {
 func TestManualCloseAndRestart(t *testing.T) {
 	s, _ := testService(t)
 	now := time.Now()
-	handle(t, s, "FRAME core-one 5", now)
+	handle(t, s, "LAYER core-one 5", now)
 	id := active(t, s, "core-one").ID
 	if err := s.CloseSession(id); err != nil {
 		t.Fatal(err)
 	}
-	handle(t, s, "FRAME core-one 6", now.Add(time.Second))
+	handle(t, s, "LAYER core-one 6", now.Add(time.Second))
 	if _, err := s.Store.Active("core-one"); !errors.Is(err, ErrNotFound) {
-		t.Fatal("manual close did not suppress FRAME")
+		t.Fatal("manual close did not suppress LAYER")
 	}
 	handle(t, s, "START core-one next", now.Add(3*time.Second))
 	id = active(t, s, "core-one").ID
-	handle(t, s, "FRAME core-one 7", now.Add(4*time.Second))
+	handle(t, s, "LAYER core-one 7", now.Add(4*time.Second))
 	if a := active(t, s, "core-one"); a.FrameCount != 1 {
 		t.Fatal("START did not clear suppression")
 	}
@@ -298,7 +302,7 @@ func TestManualCloseAndRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.Root = resumed.Root
-	handle(t, resumed, "FRAME core-one 8", now.Add(5*time.Second))
+	handle(t, resumed, "LAYER core-one 8", now.Add(5*time.Second))
 	if !active(t, resumed, "core-one").Recovered {
 		t.Fatal("restart did not clear suppression")
 	}
@@ -307,9 +311,9 @@ func TestManualCloseAndRestart(t *testing.T) {
 func TestRestartKeepsActiveAndFailsPendingCapture(t *testing.T) {
 	s, _ := testService(t)
 	now := time.Now()
-	handle(t, s, "FRAME core-one 1", now)
+	handle(t, s, "LAYER core-one 1", now)
 	id := active(t, s, "core-one").ID
-	_, _, err := s.Store.Apply(context.Background(), marker(t, "FRAME core-one 2", now.Add(time.Second)))
+	_, _, err := s.Store.Apply(context.Background(), marker(t, "LAYER core-one 2", now.Add(time.Second)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,26 +334,63 @@ func TestRestartKeepsActiveAndFailsPendingCapture(t *testing.T) {
 	if ss.ID != id || ss.FailureCount != 1 || ss.PendingCount != 0 || ss.FrameCount != 1 {
 		t.Fatalf("restart: %+v", ss)
 	}
-	handle(t, s, "FRAME core-one 2", now.Add(4*time.Second))
+	handle(t, s, "LAYER core-one 2", now.Add(4*time.Second))
 	if a := active(t, s, "core-one"); a.FrameCount != 1 {
 		t.Fatal("replayed missed frame at a later time")
 	}
-	handle(t, s, "FRAME core-one 3", now.Add(5*time.Second))
+	handle(t, s, "LAYER core-one 3", now.Add(5*time.Second))
 	if a := active(t, s, "core-one"); a.FrameCount != 2 {
 		t.Fatal("did not continue active session")
+	}
+}
+
+func TestStoreMigratesLegacyFrameKinds(t *testing.T) {
+	s, _ := testService(t)
+	handle(t, s, "LAYER core-one 1", time.Now())
+	id := active(t, s, "core-one").ID
+	if _, err := s.Store.db.Exec(`
+UPDATE captures SET kind='FRAME';
+UPDATE recent_events SET kind='FRAME';
+UPDATE sessions SET opened_by='frame';
+PRAGMA user_version=1;
+`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store, err := OpenStore(s.Config.DataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Store = store
+	var version int
+	if err := store.db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	m, err := store.Snapshot(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var recentKind string
+	if err := store.db.QueryRow(`SELECT kind FROM recent_events WHERE printer_id='core-one'`).Scan(&recentKind); err != nil {
+		t.Fatal(err)
+	}
+	if version != 2 || m.Session.OpenedBy != "layer" || len(m.Captures) != 1 || m.Captures[0].Kind != "LAYER" || recentKind != "LAYER" {
+		t.Fatalf("migration failed: version=%d manifest=%+v recent=%s", version, m, recentKind)
 	}
 }
 
 func TestFailedAndExpiredCapture(t *testing.T) {
 	s, cam := testService(t)
 	cam.err = errors.New("camera offline")
-	handle(t, s, "FRAME core-one 1", time.Now())
+	handle(t, s, "LAYER core-one 1", time.Now())
 	ss := active(t, s, "core-one")
 	if ss.FailureCount != 1 || ss.FrameCount != 0 {
 		t.Fatalf("failure %+v", ss)
 	}
 	cam.err = nil
-	handle(t, s, "FRAME core-one 2", time.Now().Add(-time.Minute))
+	handle(t, s, "LAYER core-one 2", time.Now().Add(-time.Minute))
 	if cam.calls != 1 {
 		t.Fatal("captured an expired marker")
 	}
@@ -483,7 +524,7 @@ func TestUDPAndConcurrentPrinters(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("UDP did not reach camera")
 	}
-	client.Write([]byte(markerPrefix + "FRAME mini 20"))
+	client.Write([]byte(markerPrefix + "LAYER mini 20"))
 	deadline := time.Now().Add(3 * time.Second)
 	for {
 		ss, err := s.Store.Active("mini")
@@ -503,7 +544,7 @@ func TestUDPAndConcurrentPrinters(t *testing.T) {
 		t.Fatal("slow camera blocked status UI")
 	}
 	for i := 0; i < 70; i++ {
-		s.Dispatch(marker(t, fmt.Sprintf("FRAME core-one %d", i+2), time.Now()))
+		s.Dispatch(marker(t, fmt.Sprintf("LAYER core-one %d", i+2), time.Now()))
 	}
 	if p, _ := s.Status(); p[0].Dropped == 0 {
 		t.Fatal("expected bounded queue drops")
@@ -518,12 +559,12 @@ func TestUDPAndConcurrentPrinters(t *testing.T) {
 func TestSourceGuardAndGCode(t *testing.T) {
 	s, _ := testService(t)
 	s.printers["core-one"].printer.SourceIP = "192.168.1.42"
-	if s.Dispatch(marker(t, "FRAME core-one 1", time.Now())) {
+	if s.Dispatch(marker(t, "LAYER core-one 1", time.Now())) {
 		t.Fatal("accepted unexpected sender")
 	}
 	codes := GCode(s.Config, s.Config.Printers[0])
-	for i, code := range []string{codes.Start, codes.Frame, codes.Stop} {
-		if strings.Count(code, "M118 SNAPSHOT_BUDDY_V1") != 2 || !strings.Contains(code, "G4 P100") {
+	for i, code := range []string{codes.Start, codes.Layer, codes.Stop} {
+		if strings.Count(code, "M118 SB1") != 2 || !strings.Contains(code, "G4 P100") {
 			t.Fatal("missing redundant marker")
 		}
 		var commands []string
@@ -542,7 +583,7 @@ func TestSourceGuardAndGCode(t *testing.T) {
 		}
 	}
 	for i, purpose := range []string{"start session", "layer snapshot", "final snapshot and close session"} {
-		code := []string{codes.Start, codes.Frame, codes.Stop}[i]
+		code := []string{codes.Start, codes.Layer, codes.Stop}[i]
 		label := "Snapshot Buddy: " + purpose + " (core-one)"
 		if !strings.HasPrefix(code, "; BEGIN "+label+"\n") || !strings.HasSuffix(code, "\n; END "+label) {
 			t.Fatalf("missing identifying comments: %s", code)
@@ -566,7 +607,7 @@ func TestSetupCopiesLabeledSnippets(t *testing.T) {
 		t.Fatalf("got %d snippet blocks", len(blocks))
 	}
 	for i, p := range s.Config.Printers {
-		for j, kind := range []string{"start", "stop", "frame"} {
+		for j, kind := range []string{"start", "stop", "layer"} {
 			if blocks[i*3+j][1] != kind+"-"+p.ID {
 				t.Errorf("printer %s snippets must appear in Start, End, Layer order", p.ID)
 			}
@@ -583,7 +624,7 @@ func TestSetupCopiesLabeledSnippets(t *testing.T) {
 	}
 	for _, p := range s.Config.Printers {
 		codes := GCode(s.Config, p)
-		for kind, expected := range map[string]string{"start": codes.Start, "frame": codes.Frame, "stop": codes.Stop} {
+		for kind, expected := range map[string]string{"start": codes.Start, "layer": codes.Layer, "stop": codes.Stop} {
 			found := false
 			for _, block := range blocks {
 				if block[1] == kind+"-"+p.ID {
@@ -661,7 +702,7 @@ func TestWebCopyAndLibraryLayout(t *testing.T) {
 func TestWebLocalizableTimestamps(t *testing.T) {
 	s, _ := testService(t)
 	at := time.Now().UTC().Truncate(time.Second)
-	handle(t, s, "FRAME core-one 42", at)
+	handle(t, s, "LAYER core-one 42", at)
 	id := active(t, s, "core-one").ID
 	handle(t, s, "STOP core-one 43", at.Add(time.Second))
 	before, err := s.Store.Snapshot(id)
@@ -721,7 +762,7 @@ func TestReadmeSnippetsMatchGenerated(t *testing.T) {
 	if len(blocks) != 3 {
 		t.Fatalf("got %d README snippets", len(blocks))
 	}
-	for i, expected := range []string{codes.Start, codes.Stop, codes.Frame} {
+	for i, expected := range []string{codes.Start, codes.Stop, codes.Layer} {
 		if blocks[i][1] != expected {
 			t.Fatalf("README snippet %d differs from generated G-code", i+1)
 		}
@@ -732,12 +773,12 @@ func TestWebArchiveAuthenticationAndActions(t *testing.T) {
 	s, cam := testService(t)
 	now := time.Now()
 	handle(t, s, "START core-one <script>alert(1)</script>", now)
-	handle(t, s, "FRAME core-one 1", now)
+	handle(t, s, "LAYER core-one 1", now)
 	cam.err = errors.New("camera unavailable")
-	handle(t, s, "FRAME core-one 2", now)
+	handle(t, s, "LAYER core-one 2", now)
 	cam.err = nil
-	handle(t, s, "FRAME core-one 3", now)
-	handle(t, s, "FRAME core-one 4", now)
+	handle(t, s, "LAYER core-one 3", now)
+	handle(t, s, "LAYER core-one 4", now)
 	id := active(t, s, "core-one").ID
 	s.Config.AuthUser, s.Config.AuthPassword = "user", "password"
 	h, err := NewWeb(s)
@@ -834,7 +875,7 @@ func TestRootRejectsSymlinkEscape(t *testing.T) {
 }
 
 func FuzzParsePacket(f *testing.F) {
-	f.Add([]byte(`gcode v="M118 SNAPSHOT_BUDDY_V1 FRAME core-one 1" 2`))
+	f.Add([]byte(`gcode v="M118 SB1 LAYER core-one 1" 2`))
 	f.Add([]byte(markerPrefix + "START core-one model"))
 	f.Fuzz(func(t *testing.T, data []byte) {
 		if len(data) > 65536 {

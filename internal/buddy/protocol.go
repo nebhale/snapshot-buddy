@@ -11,7 +11,8 @@ import (
 	"unicode/utf8"
 )
 
-const markerPrefix = "M118 SNAPSHOT_BUDDY_V1 "
+const markerPrefix = "M118 SB1 "
+const legacyMarkerPrefix = "M118 SNAPSHOT_BUDDY_V1 "
 const MaxMarkerBytes = 1024
 
 var metricPattern = regexp.MustCompile(`(?:^|\s)gcode(?:,[^\s]+)?\s+v="((?:\\.|[^"\\])*)"`)
@@ -33,7 +34,7 @@ func ParsePacket(data []byte, source string, at time.Time) []Event {
 	for line := range strings.SplitSeq(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		command := line
-		if !strings.HasPrefix(command, markerPrefix) {
+		if _, _, ok := markerPayload(command); !ok {
 			m := metricPattern.FindStringSubmatch(line)
 			if m == nil {
 				continue
@@ -52,12 +53,23 @@ func ParsePacket(data []byte, source string, at time.Time) []Event {
 	return result
 }
 
+func markerPayload(command string) (payload string, legacy bool, ok bool) {
+	if strings.HasPrefix(command, markerPrefix) {
+		return strings.TrimPrefix(command, markerPrefix), false, true
+	}
+	if strings.HasPrefix(command, legacyMarkerPrefix) {
+		return strings.TrimPrefix(command, legacyMarkerPrefix), true, true
+	}
+	return "", false, false
+}
+
 func ParseMarker(command string) (Event, error) {
 	e := Event{Layer: -1, Raw: command}
-	if len(command) > MaxMarkerBytes || !utf8.ValidString(command) || !strings.HasPrefix(command, markerPrefix) || strings.IndexFunc(command, unicode.IsControl) >= 0 {
+	payload, legacy, ok := markerPayload(command)
+	if len(command) > MaxMarkerBytes || !utf8.ValidString(command) || !ok || strings.IndexFunc(command, unicode.IsControl) >= 0 {
 		return e, fmt.Errorf("invalid marker")
 	}
-	parts := strings.SplitN(strings.TrimPrefix(command, markerPrefix), " ", 3)
+	parts := strings.SplitN(payload, " ", 3)
 	if len(parts) != 3 || !printerIDPattern.MatchString(parts[1]) {
 		return e, fmt.Errorf("expected event, printer ID and payload")
 	}
@@ -68,7 +80,19 @@ func ParseMarker(command string) (Event, error) {
 		if e.Name == "" {
 			return e, fmt.Errorf("empty print name")
 		}
-	case "FRAME", "STOP":
+	case "FRAME":
+		// Already-sliced files can retain the original marker indefinitely.
+		if !legacy {
+			return e, fmt.Errorf("unknown event")
+		}
+		e.Kind = "LAYER"
+		fallthrough
+	case "LAYER":
+		if legacy && parts[0] != "FRAME" {
+			return e, fmt.Errorf("unknown event")
+		}
+		fallthrough
+	case "STOP":
 		n, err := strconv.Atoi(parts[2])
 		if err != nil || n < 0 || n > 10000000 {
 			return e, fmt.Errorf("invalid layer")
@@ -80,7 +104,7 @@ func ParseMarker(command string) (Event, error) {
 	return e, nil
 }
 
-type Snippets struct{ Start, Frame, Stop string }
+type Snippets struct{ Start, Layer, Stop string }
 
 func GCode(c Config, p Printer) Snippets {
 	_, port, _ := net.SplitHostPort(c.Metrics.Address)
@@ -97,7 +121,7 @@ func GCode(c Config, p Printer) Snippets {
 	}
 	return Snippets{
 		Start: labeled("start session", fmt.Sprintf("M334 %s %s 13514\n", c.Metrics.AdvertisedHost, port)+block(markerPrefix+"START "+p.ID+" {input_filename_base}", false)),
-		Frame: labeled("layer snapshot", block(markerPrefix+"FRAME "+p.ID+" {layer_num}", true)),
+		Layer: labeled("layer snapshot", block(markerPrefix+"LAYER "+p.ID+" {layer_num}", true)),
 		Stop:  labeled("final snapshot and close session", block(markerPrefix+"STOP "+p.ID+" {total_layer_count}", true)),
 	}
 }

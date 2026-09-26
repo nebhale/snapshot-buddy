@@ -18,7 +18,7 @@ import (
 
 // Buddy firmware's metric strings hold 47 bytes. Leave room for the marker,
 // event, and an eight-digit layer number without silently truncating routing.
-var printerIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,8}$`)
+var printerIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,22}$`)
 
 type Printer struct {
 	ID       string `yaml:"id" json:"id"`
@@ -120,7 +120,7 @@ func DecodeConfig(r io.Reader) (Config, error) {
 	for i := range c.Printers {
 		p := &c.Printers[i]
 		if !printerIDPattern.MatchString(p.ID) || seen[p.ID] {
-			return c, fmt.Errorf("invalid or repeated printer ID %q (use 1–9 lowercase letters, digits, underscores or hyphens)", p.ID)
+			return c, fmt.Errorf("invalid or repeated printer ID %q (use 1–23 lowercase letters, digits, underscores or hyphens)", p.ID)
 		}
 		seen[p.ID] = true
 		if strings.TrimSpace(p.Name) == "" {

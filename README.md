@@ -128,9 +128,9 @@ At the **end of Start G-code**:
 ; BEGIN Snapshot Buddy: start session (core-one)
 M334 192.168.1.50 8514 13514
 M331 gcode
-M118 SNAPSHOT_BUDDY_V1 START core-one {input_filename_base}
+M118 SB1 START core-one {input_filename_base}
 G4 P100
-M118 SNAPSHOT_BUDDY_V1 START core-one {input_filename_base}
+M118 SB1 START core-one {input_filename_base}
 M332 gcode
 ; END Snapshot Buddy: start session (core-one)
 ```
@@ -141,9 +141,9 @@ At the **beginning of End G-code**:
 ; BEGIN Snapshot Buddy: final snapshot and close session (core-one)
 M400
 M331 gcode
-M118 SNAPSHOT_BUDDY_V1 STOP core-one {total_layer_count}
+M118 SB1 STOP core-one {total_layer_count}
 G4 P100
-M118 SNAPSHOT_BUDDY_V1 STOP core-one {total_layer_count}
+M118 SB1 STOP core-one {total_layer_count}
 M332 gcode
 ; END Snapshot Buddy: final snapshot and close session (core-one)
 ```
@@ -154,9 +154,9 @@ In **After layer change G-code**:
 ; BEGIN Snapshot Buddy: layer snapshot (core-one)
 M400
 M331 gcode
-M118 SNAPSHOT_BUDDY_V1 FRAME core-one {layer_num}
+M118 SB1 LAYER core-one {layer_num}
 G4 P100
-M118 SNAPSHOT_BUDDY_V1 FRAME core-one {layer_num}
+M118 SB1 LAYER core-one {layer_num}
 M332 gcode
 ; END Snapshot Buddy: layer snapshot (core-one)
 ```
@@ -177,18 +177,18 @@ The web interface displays timestamps in the browser's locale and time zone,
 including recovered-print names. Stored timestamps, logs, and export metadata
 remain in UTC.
 
-START opens a named session. Each distinct FRAME layer number saves at most one
+START opens a named session. Each distinct LAYER number saves at most one
 frame in that session. STOP attempts a final capture and closes the session,
 even if the camera is unavailable. A new START closes an unfinished session
 with reason `superseded` and creates a separate session.
 
-A loose FRAME automatically opens `Recovered print — <UTC timestamp>`. Its
+A loose LAYER automatically opens `Recovered print — <UTC timestamp>`. Its
 triggering frame is captured and its first observed layer, sender IP, original
 marker, and receipt time are retained. A later START opens a new named session;
 it does not merge or rename the recovered one. A loose STOP is diagnostic only.
 
 **Close session** is available on active sessions. After a manual close,
-FRAME messages for that printer are ignored until a new START or service
+LAYER messages for that printer are ignored until a new START or service
 restart. The printer's dashboard card shows this suppression. There is no
 inactivity timeout: a pause or a very slow layer does not close a session.
 
@@ -197,7 +197,9 @@ marked failed because a later image cannot reconstruct that layer. Interrupted
 video jobs return to the queue with their original fixed frame lists.
 
 The receiver parses both Prusa's `gcode v="…"` metrics and bare markers for
-diagnostics. Identical lifecycle messages received within two seconds are
+diagnostics. It also accepts the legacy `SNAPSHOT_BUDDY_V1` marker and
+normalizes legacy `FRAME` events to `LAYER`. Identical lifecycle messages
+received within two seconds are
 deduplicated across restarts. Layer numbers are deduplicated for the entire
 session, including out-of-order repeats and failed captures. A two-second
 duplicate window also prevents a trailing repeated layer marker from reviving

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.0
+
+- Shorten generated markers to `SB1` and rename the layer notification from
+  `FRAME` to `LAYER`, leaving more of the firmware's 47-byte metric value for
+  printer IDs and print names.
+- Continue accepting legacy `SNAPSHOT_BUDDY_V1` and `FRAME` markers from
+  already-sliced files.
+
 ## 1.0.0
 
 The first stable release of Snapshot Buddy.

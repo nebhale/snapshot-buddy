@@ -129,7 +129,7 @@ func (s *Service) Handle(ctx context.Context, e Event) error {
 	p.lastEvent = e.ReceivedAt
 	suppressed := p.suppressed
 	p.mu.Unlock()
-	if suppressed && e.Kind == "FRAME" {
+	if suppressed && e.Kind == "LAYER" {
 		return nil
 	}
 	capture, result, err := s.Store.Apply(ctx, e)
