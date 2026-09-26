@@ -1,0 +1,21 @@
+internal/buddy/web/app.js
+  s_6951ea044cc556::t_c74ac9e7e13b7a 110
+internal/buddy/web/pages.html
+  s_6951ea044cc556::t_c2a4ba18901b78 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "6292a7ceb06f0b4dfad410d7e717372facbead9d",
+  "prompts": {},
+  "sessions": {
+    "s_6951ea044cc556": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0df56-a69c-72f0-a594-861396bfdcb6",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Ben Hale <nebhale@nebhale.com>"
+    }
+  }
+}

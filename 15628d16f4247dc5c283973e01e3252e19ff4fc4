@@ -1,0 +1,27 @@
+CHANGELOG.md
+  s_6951ea044cc556::t_adac3f74c46437 5-7
+README.md
+  s_6951ea044cc556::t_4b3e116272f507 123-129,137,139,141
+internal/buddy/protocol.go
+  s_6951ea044cc556::t_c41db480d8101d 123-124,128
+internal/buddy/slicer_test.go
+  s_6951ea044cc556::t_7b3ff2a2cdb02d 1-91
+internal/buddy/web/pages.html
+  s_6951ea044cc556::t_cf83f629b25f42 25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "15628d16f4247dc5c283973e01e3252e19ff4fc4",
+  "prompts": {},
+  "sessions": {
+    "s_6951ea044cc556": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0df56-a69c-72f0-a594-861396bfdcb6",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Ben Hale <nebhale@nebhale.com>"
+    }
+  }
+}
