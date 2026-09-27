@@ -2,16 +2,19 @@
 
 ## Unreleased
 
+## 1.2.0
+
 - Allow generated G-code to target a separate `metrics.advertised_port`,
   defaulting to the application's UDP listening port.
-
 - Match Filament Buddy’s slicer filename check, using `Print` for names that
   cannot fit safely in the firmware’s 47-byte metric value.
-
 - Strengthen START and STOP delivery with three markers spaced 1.1 seconds
   apart and a restart-persistent five-second deduplication window. Layer
   markers retain their two copies and 100 ms spacing. Update the Start and
   End slicer blocks after upgrading; existing sliced files are unchanged.
+- Align interface terminology and setup guidance with Filament Buddy, keep
+  printer IDs visible during active sessions, and show snapshot progress on
+  its own line.
 
 ## 1.1.0
 
