@@ -89,3 +89,31 @@ Release publication never deploys dockerpi or any other installation.
 Do not put live printer IPs, credentials, or personal camera images in tests
 or tracked configuration. Example addresses and generated image fixtures are
 sufficient.
+
+## Live browser verification
+
+The shared `web/updates.js` transport and reconciler intentionally match in both
+Buddy repositories. Keep changes and their regression tests aligned. The server
+owns rendered presentation; the browser owns drafts and interaction. Notifications
+are invalidations, not commands or mutation acknowledgments.
+
+CI runs `scripts/browser.test.cjs` against isolated loopback demos with synthetic
+data at desktop and mobile widths. To run it locally with Node.js 24+:
+
+```sh
+buddy_browser_tools="$(mktemp -d)"
+npm install --prefix "$buddy_browser_tools" --no-audit --no-fund playwright@1.62.1
+node "$buddy_browser_tools/node_modules/playwright/cli.js" install chromium --only-shell
+NODE_PATH="$buddy_browser_tools/node_modules" node --test scripts/browser.test.cjs
+```
+
+Set `BUDDY_SCREENSHOT_DIR` to retain desktop and mobile screenshots. The tests
+build and stop their own demo server with `BUDDY_DEMO_PORT=0`. Demo-only marker,
+catalog (Filament), and handler-restart routes exercise real HTTP without touching
+production or hardware. Production endpoints do not include these controls.
+The suites cover multiple tabs, conflicts, focus, drafts, polling, reconnects,
+and fresh credentials after a restart. Unit tests additionally control heartbeat
+expiry, hidden tabs, and obsolete responses deterministically. Required Source
+and native ARM64/AMD64 container checks must all pass before merge. Follow the
+README public-host checks at the next deployment; local results cannot certify
+a production Cloudflare Tunnel.

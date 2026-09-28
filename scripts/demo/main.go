@@ -8,10 +8,12 @@ import (
 	"image/color"
 	"image/jpeg"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nebhale/snapshot-buddy/internal/buddy"
@@ -65,7 +67,10 @@ func main() {
 		log.Fatal(err)
 	}
 	at := time.Now().UTC()
+	var eventMu sync.Mutex
 	event := func(payload string) {
+		eventMu.Lock()
+		defer eventMu.Unlock()
 		e, err := buddy.ParseMarker("M118 SB1 " + payload)
 		if err != nil {
 			log.Fatal(err)
@@ -95,7 +100,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("Local preview: http://127.0.0.1:8090; sample data: %s", data)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /demo.jpg", func(w http.ResponseWriter, r *http.Request) {
 		img, _ := (camera{}).Capture(r.Context(), "")
@@ -110,11 +115,40 @@ func main() {
 		w.Header().Set("Content-Type", "application/javascript")
 		fmt.Fprint(w, definitions, demoMedia)
 	})
-	mux.Handle("/", h)
-	log.Fatal(http.ListenAndServe("127.0.0.1:8090", mux))
+	mux.HandleFunc("POST /demo/marker", func(w http.ResponseWriter, r *http.Request) {
+		marker := r.FormValue("marker")
+		if _, err := buddy.ParseMarker("M118 SB1 " + marker); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		event(marker)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	application := newDemoApplication(h)
+	mux.HandleFunc("POST /demo/restart", func(w http.ResponseWriter, r *http.Request) {
+		next, err := buddy.NewWeb(service)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		application.reset(next)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.Handle("/", application)
+	port := os.Getenv("BUDDY_DEMO_PORT")
+	if port == "" {
+		port = "8090"
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:"+port)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("Demo: http://%s; sample data: %s", listener.Addr(), data)
+	log.Fatal(http.Serve(listener, mux))
 }
 
 const demoMedia = `
+if (document.querySelector("#live-dialog")) {
 const demoSheet = new LiveSheet(document.querySelector("#live-dialog"));
 document.querySelectorAll("[data-live]").forEach(button => {
  const video = button.querySelector("video");
@@ -134,4 +168,5 @@ document.querySelectorAll("[data-live]").forEach(button => {
  const preview = {button, video, message: {textContent: ""}};
  button.addEventListener("click", () => demoSheet.open(preview));
 });
+}
 `

@@ -27,6 +27,11 @@ jobs:
           REQUIRE_FFMPEG: "1"
       - run: node --test internal/buddy/testdata/*.test.cjs
       - run: python3 -m unittest discover -s scripts -p '*_test.py'
+      - name: Browser interactions
+        run: |
+          npm install --prefix "$RUNNER_TEMP/buddy-browser" --no-audit --no-fund playwright@1.62.1
+          node "$RUNNER_TEMP/buddy-browser/node_modules/playwright/cli.js" install --with-deps chromium --only-shell
+          NODE_PATH="$RUNNER_TEMP/buddy-browser/node_modules" node --test scripts/browser.test.cjs
   containers:
     name: Containers (${{ matrix.arch }})
     strategy:
