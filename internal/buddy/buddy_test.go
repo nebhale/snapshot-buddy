@@ -349,6 +349,7 @@ func TestStoreMigratesLegacyFrameKinds(t *testing.T) {
 	handle(t, s, "LAYER core-one 1", time.Now())
 	id := active(t, s, "core-one").ID
 	if _, err := s.Store.db.Exec(`
+ALTER TABLE sessions DROP COLUMN display_name;
 UPDATE captures SET kind='FRAME';
 UPDATE recent_events SET kind='FRAME';
 UPDATE sessions SET opened_by='frame';
@@ -376,7 +377,7 @@ PRAGMA user_version=1;
 	if err := store.db.QueryRow(`SELECT kind FROM recent_events WHERE printer_id='core-one'`).Scan(&recentKind); err != nil {
 		t.Fatal(err)
 	}
-	if version != 2 || m.Session.OpenedBy != "layer" || len(m.Captures) != 1 || m.Captures[0].Kind != "LAYER" || recentKind != "LAYER" {
+	if version != 3 || m.Session.OpenedBy != "layer" || len(m.Captures) != 1 || m.Captures[0].Kind != "LAYER" || recentKind != "LAYER" {
 		t.Fatalf("migration failed: version=%d manifest=%+v recent=%s", version, m, recentKind)
 	}
 }
@@ -735,7 +736,7 @@ func TestWebLocalizableTimestamps(t *testing.T) {
 		if strings.Contains(body, `datetime="0001-`) {
 			t.Error("never render an uninitialized timestamp as a real date")
 		}
-		if path != "/" && !strings.Contains(body, "<title data-recovered-title>") {
+		if path != "/" && !regexp.MustCompile(`<title\b[^>]*\bdata-recovered-title[\s>]+`).MatchString(body) {
 			t.Error("recovered session page title must be localizable")
 		}
 	}

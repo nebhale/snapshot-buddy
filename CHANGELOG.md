@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add editable session display names with original-name fallback, live updates,
+  and protection against conflicting edits in another tab. Printer markers and
+  session matching remain unchanged.
+
 - Update print libraries and session pages automatically over authenticated SSE,
   with polling fallback, reconnect recovery, and a compact connection indicator.
 - Preserve drafts, focus, scroll position, filters, and expanded panels while

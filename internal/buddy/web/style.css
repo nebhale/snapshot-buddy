@@ -177,3 +177,5 @@ footer{padding:16px}
 }
 
 .connection-state{font-size:11px;color:var(--muted);align-self:center}.form-message{font-size:12px;line-height:1.6;color:var(--warning);margin-top:8px}.form-message .button{margin:6px 6px 0 0}.connection-state[hidden]{display:none}#video-controls{min-width:0}@media(max-width:680px){.connection-state{max-width:150px}}
+
+.name-edit{margin-top:12px;font-size:12px;width:38rem;max-width:100%}.name-edit summary{cursor:pointer;color:var(--accent)}.name-form{margin-top:12px}.name-form label{display:block;margin-bottom:6px;color:var(--muted)}.name-row{display:flex;flex-wrap:wrap;gap:8px}.name-row input{min-width:0;flex:1 1 16rem;width:100%}.name-form .muted{overflow-wrap:anywhere}

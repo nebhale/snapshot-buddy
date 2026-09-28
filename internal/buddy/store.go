@@ -71,7 +71,7 @@ func (s *Store) initialize() error {
 	if err := s.db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
 		return err
 	}
-	if version > 2 {
+	if version > 3 {
 		return fmt.Errorf("database schema %d is newer than this application supports", version)
 	}
 	_, err := s.db.Exec(`
@@ -104,19 +104,32 @@ CREATE TABLE IF NOT EXISTS jobs (
 UPDATE captures SET kind='LAYER' WHERE kind='FRAME';
 UPDATE recent_events SET kind='LAYER' WHERE kind='FRAME';
 UPDATE sessions SET opened_by='layer' WHERE opened_by='frame';
-PRAGMA user_version=2;
 UPDATE sessions SET revision=revision+1 WHERE id IN (SELECT session_id FROM captures WHERE status='pending');
 UPDATE captures SET status='failed', error='Application stopped before capture was committed; no later frame substituted' WHERE status='pending';
 UPDATE jobs SET state='queued', progress=0, error='' WHERE state='running';
 `)
-	return err
+	if err != nil {
+		return err
+	}
+	if version < 3 {
+		tx, err := s.db.Begin()
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		if _, err := tx.Exec(`ALTER TABLE sessions ADD COLUMN display_name TEXT NOT NULL DEFAULT ''; PRAGMA user_version=3;`); err != nil {
+			return err
+		}
+		return tx.Commit()
+	}
+	return nil
 }
 
 // Fixed precision keeps SQLite's text timestamp ordering chronological.
 func stamp(t time.Time) string     { return t.UTC().Format("2006-01-02T15:04:05.000000000Z") }
 func parseTime(v string) time.Time { t, _ := time.Parse(time.RFC3339Nano, v); return t }
 
-const sessionSelect = `SELECT s.id,s.printer_id,s.name,s.state,s.close_reason,s.opened_at,s.closed_at,s.recovered,s.opened_by,s.first_layer,s.source_ip,s.initial_marker,s.revision,
+const sessionSelect = `SELECT s.id,s.printer_id,s.name,s.display_name,s.state,s.close_reason,s.opened_at,s.closed_at,s.recovered,s.opened_by,s.first_layer,s.source_ip,s.initial_marker,s.revision,
  (SELECT count(*) FROM captures WHERE session_id=s.id AND status='saved'),
  (SELECT count(*) FROM captures WHERE session_id=s.id AND status='failed'),
  (SELECT count(*) FROM captures WHERE session_id=s.id AND status='pending') FROM sessions s `
@@ -128,7 +141,7 @@ func scanSession(row scanner) (Session, error) {
 	var opened string
 	var closed sql.NullString
 	var layer sql.NullInt64
-	err := row.Scan(&v.ID, &v.PrinterID, &v.Name, &v.State, &v.CloseReason, &opened, &closed, &v.Recovered, &v.OpenedBy, &layer, &v.SourceIP, &v.InitialMarker, &v.Revision, &v.FrameCount, &v.FailureCount, &v.PendingCount)
+	err := row.Scan(&v.ID, &v.PrinterID, &v.Name, &v.DisplayName, &v.State, &v.CloseReason, &opened, &closed, &v.Recovered, &v.OpenedBy, &layer, &v.SourceIP, &v.InitialMarker, &v.Revision, &v.FrameCount, &v.FailureCount, &v.PendingCount)
 	if errors.Is(err, sql.ErrNoRows) {
 		return v, ErrNotFound
 	}

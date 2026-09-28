@@ -81,6 +81,7 @@ func NewWeb(s *Service) (http.Handler, error) {
 	mux.HandleFunc("GET /api/live", w.live)
 	mux.HandleFunc("GET /api/events", func(rw http.ResponseWriter, r *http.Request) { serveEvents(rw, r, &s.Store.changes, w.csrf) })
 	mux.HandleFunc("GET /sessions/{id}", w.session)
+	mux.HandleFunc("POST /sessions/{id}/name", w.renameSession)
 	mux.HandleFunc("POST /sessions/{id}/close", w.closeSession)
 	mux.HandleFunc("POST /sessions/{id}/delete", w.deleteSession)
 	mux.HandleFunc("POST /sessions/{id}/videos", w.video)
@@ -168,6 +169,10 @@ func (w *Web) render(rw http.ResponseWriter, status int, p Page) {
 func (w *Web) fail(rw http.ResponseWriter, err error) {
 	status, message := 500, "Something went wrong. Check the service logs for details."
 	switch {
+	case errors.Is(err, ErrInvalidDisplayName):
+		status, message = 400, err.Error()
+	case errors.Is(err, ErrDisplayNameConflict):
+		status, message = 409, err.Error()
 	case errors.Is(err, ErrNotFound):
 		status, message = 404, "That session or file could not be found."
 	case errors.Is(err, ErrConflict):
@@ -239,7 +244,7 @@ func (w *Web) session(rw http.ResponseWriter, r *http.Request) {
 			autoDownload = j.ID
 		}
 	}
-	w.render(rw, 200, Page{Title: m.Session.Name, View: "session", Manifest: m, Jobs: jobs, AutoDownload: autoDownload})
+	w.render(rw, 200, Page{Title: m.Session.Title(), View: "session", Manifest: m, Jobs: jobs, AutoDownload: autoDownload})
 }
 
 func (w *Web) closeSession(rw http.ResponseWriter, r *http.Request) {
@@ -340,7 +345,12 @@ func (w *Web) downloadVideo(rw http.ResponseWriter, r *http.Request) {
 		w.fail(rw, ErrConflict)
 		return
 	}
-	w.serveFile(rw, r, jobPath(j), videoFilename(j.Manifest.Session.Name), "video/mp4", true)
+	ss, err := w.service.Store.Session(j.SessionID)
+	if err != nil {
+		w.fail(rw, err)
+		return
+	}
+	w.serveFile(rw, r, jobPath(j), videoFilename(ss.Title()), "video/mp4", true)
 }
 
 // Download names are presentation only; stored exports retain their UUID paths.
