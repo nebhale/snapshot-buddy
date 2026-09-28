@@ -140,6 +140,12 @@ if (snapshot) {
   test('drafts survive unrelated changes and same-field conflicts can be resolved explicitly', { timeout: 45000 }, async t => {
     const page = await pageFor(t); await session(page);
     const other = await page.context().newPage(); await other.goto(page.url()); await other.waitForSelector('[role=combobox]');
+    const searchOnly = page.locator('.spool-form').first().getByRole('combobox');
+    await searchOnly.fill('galaxy');
+    await choose(other, 0, 'purple', 7); await save(other);
+    await page.waitForFunction(() => document.querySelector('.spool-form select').value === '7');
+    assert.equal(await searchOnly.inputValue(), 'galaxy');
+    assert.equal(await page.getByRole('button', { name: 'Use saved value' }).count(), 0, 'search alone is not an assignment draft');
     await choose(page, 0, 'white', 12);
     await other.getByRole('button', { name: '+ Prepare next section' }).click();
     await page.waitForFunction(() => document.querySelectorAll('.section-card').length === 2);
@@ -148,6 +154,10 @@ if (snapshot) {
     const form = page.locator('.spool-form').first();
     await form.getByRole('button', { name: 'Use saved value' }).waitFor();
     assert.equal(await form.locator('select').inputValue(), '12');
+    await form.getByRole('button', { name: 'Use saved value' }).focus();
+    await other.getByRole('button', { name: '+ Prepare next section' }).click();
+    await page.waitForFunction(() => document.querySelectorAll('.section-card').length === 3);
+    assert.equal(await form.getByRole('button', { name: 'Use saved value' }).evaluate(n => n === document.activeElement), true);
     await form.getByRole('button', { name: 'Use saved value' }).click();
     assert.equal(await form.locator('select').inputValue(), '19');
     await choose(page, 0, 'purple', 7);
@@ -173,9 +183,12 @@ if (snapshot) {
     assert.equal(await form.locator('select').inputValue(), '88');
     assert.equal(await input.getAttribute('aria-expanded'), 'false');
     await input.fill('fresh yellow');
+    await input.press('ArrowDown'); await input.press('ArrowDown');
+    const highlight = await input.getAttribute('aria-activedescendant');
     await page.request.post(`${address}/demo/catalog`, { data: [{ ID: 88, Label: '#88 · Fresh Yellow PETG', RemainingMG: 120000 }] });
     await page.waitForFunction(() => window.BuddyPicker.spools.find(s => s.ID === 88).RemainingMG === 120000);
     assert.equal(await input.inputValue(), 'fresh yellow');
+    assert.equal(await input.getAttribute('aria-activedescendant'), highlight);
     assert.equal(await form.locator('select').inputValue(), '88');
     assert.equal(await input.evaluate(n => n === document.activeElement), true);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);

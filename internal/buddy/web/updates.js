@@ -31,14 +31,18 @@ function buddyMessage(form, text) {
     message.setAttribute("role", "status");
     form.append(message);
   }
+  delete message.buddyConflictKey;
   message.replaceChildren(document.createTextNode(text));
   return message;
 }
 function buddyConflict(form) {
   const state = buddyFormState(form);
   const field = buddyEditable(form);
+  const key = JSON.stringify([state.latest, buddyValue(field)]);
+  if (form.querySelector(':scope > .form-message')?.buddyConflictKey === key) return;
   const label = (value) => field.name === "spool" ? (window.BuddyPicker?.label(value) || `Spool #${value}`) : value === "" ? "Reported weight" : `${value} g`;
   const message = buddyMessage(form, `Saved value: ${label(state.latest)}. Your edit: ${label(buddyValue(field))}. `);
+  message.buddyConflictKey = key;
   for (const [text, mine] of [["Use saved value", false], ["Save my value", true]]) {
     const button = document.createElement("button");
     button.type = "button"; button.className = "button secondary"; button.textContent = text;
