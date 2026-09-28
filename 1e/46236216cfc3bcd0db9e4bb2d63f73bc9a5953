@@ -1,0 +1,20 @@
+CHANGELOG.md
+  s_e6c64f04746201::t_f1cac70a19853a 5-6,18-19,23-26
+  s_e6c64f04746201::t_3cb1ccb4f2c9b3 27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "1e46236216cfc3bcd0db9e4bb2d63f73bc9a5953",
+  "prompts": {},
+  "sessions": {
+    "s_e6c64f04746201": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0e79f-6b8f-7b13-9348-8d68da6b77c0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Ben Hale <nebhale@nebhale.com>"
+    }
+  }
+}
