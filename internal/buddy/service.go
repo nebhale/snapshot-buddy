@@ -99,6 +99,7 @@ func (s *Service) Dispatch(e Event) bool {
 	default:
 		// Do not stall reception for other printers when one camera is slow.
 		p.mu.Lock()
+		defer s.Store.changes.publish()
 		p.dropped++
 		p.lastError = "Capture queue is full; a printer marker was dropped"
 		p.mu.Unlock()
@@ -119,6 +120,7 @@ func allowedSource(p Printer, source string) bool {
 // Handle is serialized per printer, including capture, so completion and a new
 // START cannot move a frame into the wrong session.
 func (s *Service) Handle(ctx context.Context, e Event) error {
+	defer s.Store.changes.publish()
 	p, ok := s.printers[e.PrinterID]
 	if !ok || !allowedSource(p.printer, e.SourceIP) {
 		return errors.New("unconfigured printer or unexpected source IP")
@@ -217,6 +219,7 @@ func atomicWrite(root *os.Root, path string, data []byte) error {
 }
 
 func (s *Service) CloseSession(id string) error {
+	defer s.Store.changes.publish()
 	ss, err := s.Store.Session(id)
 	if err != nil {
 		return err

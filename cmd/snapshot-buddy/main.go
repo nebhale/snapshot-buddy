@@ -98,7 +98,7 @@ func run() error {
 	s.Start(ctx)
 	videos := buddy.NewVideos(s)
 	videos.Start(ctx)
-	server := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 10 * time.Minute, IdleTimeout: time.Minute, MaxHeaderBytes: 16384}
+	server := &http.Server{BaseContext: func(net.Listener) context.Context { return ctx }, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 10 * time.Minute, IdleTimeout: time.Minute, MaxHeaderBytes: 16384}
 	failed := make(chan error, 2)
 	go func() { failed <- s.ServeUDP(ctx, udp) }()
 	go func() { failed <- server.Serve(listener) }()

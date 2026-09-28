@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Update print libraries and session pages automatically over authenticated SSE,
+  with polling fallback, reconnect recovery, and a compact connection indicator.
+- Preserve drafts, focus, scroll position, filters, and expanded panels while
+  updating rendered regions; save forms inline and refresh credentials after
+  restarts without replaying writes.
+- Append capture updates without replacing saved images or live cameras; update
+  video progress and frame-rate hints while retaining duration drafts and
+  automatic downloads only for requests made in the current tab.
+- Add browser regression checks and SSE streaming/deadline coverage, with
+  documented public-host verification for the next Cloudflare Tunnel deployment.
+
 ## 1.2.0
 
 - Allow generated G-code to target a separate `metrics.advertised_port`,

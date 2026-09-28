@@ -175,3 +175,5 @@ footer{padding:16px}
 .filter select{max-width:150px}
 .lede{font-size:13px}
 }
+
+.connection-state{font-size:11px;color:var(--muted);align-self:center}.form-message{font-size:12px;line-height:1.6;color:var(--warning);margin-top:8px}.form-message .button{margin:6px 6px 0 0}.connection-state[hidden]{display:none}#video-controls{min-width:0}@media(max-width:680px){.connection-state{max-width:150px}}

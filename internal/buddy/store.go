@@ -20,8 +20,9 @@ var ErrNotFound = errors.New("not found")
 var ErrConflict = errors.New("operation conflicts with active work")
 
 type Store struct {
-	db   *sql.DB
-	lock *os.File
+	changes changes
+	db      *sql.DB
+	lock    *os.File
 }
 
 func newID() string {
@@ -247,6 +248,7 @@ func (s *Store) Apply(ctx context.Context, e Event) (*Capture, string, error) {
 	if err := tx.Commit(); err != nil {
 		return nil, "", err
 	}
+	s.changes.publish()
 	if supersededID != "" {
 		slog.Info("session closed", "printer", e.PrinterID, "session", supersededID, "reason", "superseded")
 	}
@@ -269,7 +271,7 @@ func (s *Store) FinishCapture(c Capture) error {
 	if _, err := tx.Exec(`UPDATE sessions SET revision=revision+1 WHERE id=?`, c.SessionID); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return s.changed(tx.Commit())
 }
 
 func (s *Store) CloseSession(id string) error {
@@ -280,7 +282,7 @@ func (s *Store) CloseSession(id string) error {
 	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrConflict
 	}
-	return nil
+	return s.changed(nil)
 }
 
 const captureSelect = `SELECT id,session_id,kind,layer,received_at,captured_at,source_ip,raw,status,error,file,width,height,size FROM captures `
@@ -305,7 +307,11 @@ func (s *Store) Capture(id int64) (Capture, error) {
 	return scanCapture(s.db.QueryRow(captureSelect+`WHERE id=?`, id))
 }
 
-func (s *Store) Snapshot(id string) (Manifest, error) {
+func (s *Store) Snapshot(id string) (Manifest, error) { return s.snapshotSince(id, 0, nil) }
+
+// Saved and failed captures are immutable. A live view only needs new IDs and
+// the captures which were still pending at its last successful update.
+func (s *Store) snapshotSince(id string, after int64, pending []int64) (Manifest, error) {
 	m := Manifest{Version: 1, ExportedAt: time.Now().UTC(), Captures: []Capture{}}
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -316,7 +322,14 @@ func (s *Store) Snapshot(id string) (Manifest, error) {
 	if err != nil {
 		return m, err
 	}
-	rows, err := tx.Query(captureSelect+`WHERE session_id=? ORDER BY id`, id)
+	query := captureSelect + `WHERE session_id=? AND (id>?`
+	args := []any{id, after}
+	for _, pendingID := range pending {
+		query += ` OR id=?`
+		args = append(args, pendingID)
+	}
+	query += `) ORDER BY id`
+	rows, err := tx.Query(query, args...)
 	if err != nil {
 		return m, err
 	}
@@ -371,6 +384,7 @@ func (s *Store) CreateJob(m Manifest, durationMS int64) (Job, error) {
 	if err != nil {
 		return Job{}, err
 	}
+	s.changes.publish()
 	return scanJob(s.db.QueryRow(jobSelect+`WHERE session_id=? AND revision=? AND duration_ms=?`, m.Session.ID, m.Session.Revision, durationMS))
 }
 
@@ -408,16 +422,16 @@ func (s *Store) ClaimJob() (Job, error) {
 		return j, err
 	}
 	j.State = "running"
-	return j, tx.Commit()
+	return j, s.changed(tx.Commit())
 }
 
 func (s *Store) JobProgress(id string, progress float64) error {
 	_, err := s.db.Exec(`UPDATE jobs SET progress=? WHERE id=?`, progress, id)
-	return err
+	return s.changed(err)
 }
 func (s *Store) FinishJob(id, state, message string) error {
 	_, err := s.db.Exec(`UPDATE jobs SET state=?,error=?,progress=CASE WHEN ?='ready' THEN 1 ELSE progress END WHERE id=?`, state, message, state, id)
-	return err
+	return s.changed(err)
 }
 
 func (s *Store) CanDelete(id string) error {
@@ -440,5 +454,5 @@ func (s *Store) CanDelete(id string) error {
 
 func (s *Store) Delete(id string) error {
 	_, err := s.db.Exec(`DELETE FROM sessions WHERE id=?`, id)
-	return err
+	return s.changed(err)
 }

@@ -6,11 +6,11 @@ const vm = require("node:vm");
 const app = readFileSync(join(__dirname, "../web/app.js"), "utf8");
 const live = readFileSync(join(__dirname, "../web/live.js"), "utf8");
 
-function downloads(state = "queued", intent = "job1") {
+function downloads(state = "queued", intent = "job1", requestedHere = true) {
   let clicks = 0, replace = 0;
   const link = { click() { clicks++; } };
   const job = { dataset: { job: "job1", state }, querySelector() { return link; } };
-  const jobs = { dataset: { autoDownload: intent }, querySelectorAll() { return [job]; } };
+  const jobs = { buddyDownloadRequested: requestedHere, dataset: { autoDownload: intent }, querySelectorAll() { return [job]; } };
   const toast = { classList: { add() {}, remove() {} } };
   const window = { location: { href: "http://localhost/sessions/one?download=job1#videos" }, history: { state: {}, replaceState(_state, _title, url) { replace++; window.location.href = url.toString(); } } };
   const document = { querySelectorAll() { return []; }, querySelector(selector) { return selector === "[data-auto-download]" ? jobs : selector === "#toast" ? toast : null; } };
@@ -34,6 +34,7 @@ test("cached exports download immediately; failed and unrelated jobs never downl
   assert.equal(downloads("ready", "").clicks(), 0);
   assert.equal(downloads("ready", "other-job").clicks(), 0);
   assert.equal(downloads("running").clicks(), 0);
+  assert.equal(downloads("ready", "job1", false).clicks(), 0);
 });
 
 function liveContext(extra = {}) {

@@ -78,6 +78,8 @@ func NewWeb(s *Service) (http.Handler, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", w.dashboard)
 	mux.HandleFunc("GET /setup", w.setup)
+	mux.HandleFunc("GET /api/live", w.live)
+	mux.HandleFunc("GET /api/events", func(rw http.ResponseWriter, r *http.Request) { serveEvents(rw, r, &s.Store.changes, w.csrf) })
 	mux.HandleFunc("GET /sessions/{id}", w.session)
 	mux.HandleFunc("POST /sessions/{id}/close", w.closeSession)
 	mux.HandleFunc("POST /sessions/{id}/delete", w.deleteSession)
@@ -91,7 +93,7 @@ func NewWeb(s *Service) (http.Handler, error) {
 	mux.HandleFunc("POST /api/printers/{id}/webrtc", w.webrtc)
 	static, _ := fs.Sub(assets, "web")
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static)))
-	protected := w.security(mux)
+	protected := w.security(jsonActions(mux))
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/healthz" && (r.Method == "GET" || r.Method == "HEAD") {
 			if err := s.Store.db.PingContext(r.Context()); err != nil {
@@ -140,6 +142,18 @@ func (w *Web) security(next http.Handler) http.Handler {
 func (w *Web) render(rw http.ResponseWriter, status int, p Page) {
 	p.CSRF = w.csrf
 	p.DefaultDuration = w.service.Config.Video.DefaultDurationSeconds
+	if _, ok := rw.(*actionResponse); ok {
+		renderJSONError(rw, status, p.Error)
+		return
+	}
+	if live, ok := rw.(*liveResponse); ok {
+		if status != 200 {
+			renderJSONError(rw, status, p.Error)
+			return
+		}
+		w.renderLive(live, p)
+		return
+	}
 	var b bytes.Buffer
 	if err := w.templates.ExecuteTemplate(&b, "layout", p); err != nil {
 		slog.Error("render page", "error", err)
@@ -196,7 +210,19 @@ func (w *Web) setup(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (w *Web) session(rw http.ResponseWriter, r *http.Request) {
-	m, err := w.service.Store.Snapshot(r.PathValue("id"))
+	after := int64(0)
+	var pending []int64
+	if _, ok := rw.(*liveResponse); ok {
+		after, _ = strconv.ParseInt(r.URL.Query().Get("after"), 10, 64)
+		after = max(0, after)
+		for _, value := range strings.Split(r.URL.Query().Get("pending"), ",") {
+			id, err := strconv.ParseInt(value, 10, 64)
+			if err == nil && id > 0 && len(pending) < 256 {
+				pending = append(pending, id)
+			}
+		}
+	}
+	m, err := w.service.Store.snapshotSince(r.PathValue("id"), after, pending)
 	if err != nil {
 		w.fail(rw, err)
 		return
