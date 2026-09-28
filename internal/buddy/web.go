@@ -61,15 +61,11 @@ func NewWeb(s *Service) (http.Handler, error) {
 			}
 			return t.UTC().Format("Jan 02, 2006 · 15:04:05 UTC")
 		},
-		"percent": func(p float64) int { return int(p * 100) },
-		"seconds": func(ms int64) string { return strconv.FormatFloat(float64(ms)/1000, 'f', -1, 64) },
-		"short": func(id string) string {
-			if len(id) > 8 {
-				return id[:8]
-			}
-			return id
-		},
-		"increment": func(n int) int { return n + 1 },
+		"percent":           func(p float64) int { return int(p * 100) },
+		"seconds":           func(ms int64) string { return strconv.FormatFloat(float64(ms)/1000, 'f', -1, 64) },
+		"printerName":       func(id string) string { return printerDisplayName(s.Config, id) },
+		"markerDescription": func(raw string) string { return markerDescription(s.Config, raw) },
+		"increment":         func(n int) int { return n + 1 },
 	}).ParseFS(assets, "web/*.html")
 	if err != nil {
 		return nil, err
@@ -323,6 +319,10 @@ func (w *Web) downloadVideo(rw http.ResponseWriter, r *http.Request) {
 
 // Download names are presentation only; stored exports retain their UUID paths.
 func videoFilename(name string) string {
+	return safeFilename(name) + ".mp4"
+}
+
+func safeFilename(name string) string {
 	name = strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) || strings.ContainsRune(`<>:"/\|?*`, r) {
 			return '_'
@@ -345,11 +345,11 @@ func videoFilename(name string) string {
 		(len(base) == 4 && (strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")) && base[3] >= '1' && base[3] <= '9') {
 		name = "_" + name
 	}
-	return name + ".mp4"
+	return name
 }
 
-func exportName(s Session) string {
-	return "snapshot-buddy-" + s.PrinterID + "-" + s.OpenedAt.UTC().Format("20060102-150405") + "-" + s.ID[:8]
+func (w *Web) exportName(s Session) string {
+	return "snapshot-buddy-" + safeFilename(printerDisplayName(w.service.Config, s.PrinterID)) + "-" + s.OpenedAt.UTC().Format("20060102-150405") + "-" + s.ID[:8]
 }
 
 func (w *Web) serveFile(rw http.ResponseWriter, r *http.Request, path, name, contentType string, download bool) {
@@ -402,7 +402,7 @@ func (w *Web) archive(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 	rw.Header().Set("Content-Type", "application/x-tar")
-	rw.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": exportName(m.Session) + ".tar"}))
+	rw.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": w.exportName(m.Session) + ".tar"}))
 	tw := tar.NewWriter(rw)
 	write := func(name string, size int64, reader io.Reader) error {
 		if err := tw.WriteHeader(&tar.Header{Name: name, Mode: 0644, Size: size, ModTime: m.ExportedAt}); err != nil {
