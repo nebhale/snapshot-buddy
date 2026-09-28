@@ -58,6 +58,7 @@ test("recovered names and page titles are localized; ordinary names are untouche
   const name = vm.runInContext('localizedSessionName({ recovered: true, opened_at: "2026-01-01T01:02:03Z", name: "UTC fallback" })', context);
   assert.equal(name, `Recovered print — ${time.textContent}`);
   assert.equal(vm.runInContext('localizedSessionName({ recovered: false, name: "Keep UTC in this filename" })', context), "Keep UTC in this filename");
+  assert.equal(vm.runInContext('localizedSessionName({ recovered: true, display_name: "My vase", opened_at: "2026-01-01T01:02:03Z", name: "UTC fallback" })', context), "My vase");
 });
 
 test("missing, zero, and invalid timestamps do not become misleading dates", () => {

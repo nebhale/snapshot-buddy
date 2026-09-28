@@ -20,6 +20,14 @@ runs on the camera and no camera SD card is needed.
 
 ![Session snapshots and timelapse export with synthetic demonstration data](docs/images/session.png)
 
+Open a session and choose **Edit display name** to give it a more useful name.
+This works for active and past sessions. Leave the field blank to restore the
+original name. Custom names appear in the library, printer card, and session
+page; the original name and received printer markers remain in the record.
+Names are local to each Buddy app, so edits in one app do not rename the other.
+MP4 downloads use the current display name, including videos created before
+a rename.
+
 ## Quick start
 
 Requirements: a 64-bit Docker host, an existing go2rtc server with FFmpeg

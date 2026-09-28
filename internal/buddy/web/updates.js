@@ -11,10 +11,11 @@ function buddyKey(node) {
 }
 function buddyValue(field) {
   if (!field) return "";
+  if (field.name === "display_name") return field.value.trim();
   if (field.name === "grams" && field.value !== "" && Number.isFinite(Number(field.value))) return String(Number(field.value));
   return field.value;
 }
-function buddyEditable(form) { return form.querySelector('[name="spool"], [name="grams"], [name="duration"]'); }
+function buddyEditable(form) { return form.querySelector('[name="spool"], [name="grams"], [name="duration"], [name="display_name"]'); }
 function buddyFormState(form) {
   if (!form.buddyState) {
     const field = buddyEditable(form);
@@ -40,7 +41,7 @@ function buddyConflict(form) {
   const field = buddyEditable(form);
   const key = JSON.stringify([state.latest, buddyValue(field)]);
   if (form.querySelector(':scope > .form-message')?.buddyConflictKey === key) return;
-  const label = (value) => field.name === "spool" ? (window.BuddyPicker?.label(value) || `Spool #${value}`) : value === "" ? "Reported weight" : `${value} g`;
+  const label = (value) => field.name === "display_name" ? (value || "Original name") : field.name === "spool" ? (window.BuddyPicker?.label(value) || `Spool #${value}`) : value === "" ? "Reported weight" : `${value} g`;
   const message = buddyMessage(form, `Saved value: ${label(state.latest)}. Your edit: ${label(buddyValue(field))}. `);
   message.buddyConflictKey = key;
   for (const [text, mine] of [["Use saved value", false], ["Save my value", true]]) {
@@ -283,7 +284,8 @@ class BuddyUpdates {
     window.BuddyPicker?.enhance();
     if (typeof updateVideoRate === "function") updateVideoRate();
     if (typeof downloadRequestedVideo === "function") downloadRequestedVideo();
-    if (document.querySelector("title[data-recovered-title]")) document.title = `${document.querySelector("h1").textContent} · Snapshot Buddy`;
+    const title = document.querySelector("title[data-app-name]");
+    if (title && this.root.dataset.view === "session") document.title = `${document.querySelector("h1").textContent} · ${title.dataset.appName}`;
   }
   async submit(event) {
     const form = event.target;

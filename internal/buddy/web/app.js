@@ -24,6 +24,7 @@ function renderTimestamp(target, value) {
   target.replaceChildren(time);
 }
 function localizedSessionName(session) {
+  if (session.display_name) return session.display_name;
   const opened = session.recovered && formatTimestamp(session.opened_at);
   return opened ? `Recovered print — ${opened}` : session.name;
 }

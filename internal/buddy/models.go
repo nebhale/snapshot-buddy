@@ -6,6 +6,7 @@ type Session struct {
 	ID            string     `json:"id"`
 	PrinterID     string     `json:"printer_id"`
 	Name          string     `json:"name"`
+	DisplayName   string     `json:"display_name,omitempty"`
 	State         string     `json:"state"`
 	CloseReason   string     `json:"close_reason,omitempty"`
 	OpenedAt      time.Time  `json:"opened_at"`

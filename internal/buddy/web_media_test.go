@@ -89,6 +89,17 @@ func TestVideoDownloadIntent(t *testing.T) {
 	if err != nil || params["filename"] != "Workshop parts tray.mp4" || w.Body.String() != "test-video" {
 		t.Fatalf("download: %d %v", w.Code, params)
 	}
+	if err := s.Store.SetDisplayName(id, "Renamed / parts tray", ""); err != nil {
+		t.Fatal(err)
+	}
+	if again := request("POST", "/sessions/"+id+"/videos", form); again.Header().Get("Location") != location.String() {
+		t.Fatal("rename invalidated a cached video")
+	}
+	w = request("GET", "/videos/"+jobID+"/download", nil)
+	_, params, err = mime.ParseMediaType(w.Header().Get("Content-Disposition"))
+	if err != nil || params["filename"] != "Renamed _ parts tray.mp4" || w.Body.String() != "test-video" {
+		t.Fatalf("renamed download: %d %v", w.Code, params)
+	}
 	handle(t, s, "START mini Another print", now)
 	other := active(t, s, "mini").ID
 	for _, path := range []string{"/sessions/" + id, "/sessions/" + other + "?download=" + jobID, "/sessions/" + id + "?download=unknown"} {
