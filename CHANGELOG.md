@@ -2,10 +2,11 @@
 
 ## Unreleased
 
+## 1.3.0
+
 - Add editable session display names with original-name fallback, live updates,
   and protection against conflicting edits in another tab. Printer markers and
   session matching remain unchanged.
-
 - Update print libraries and session pages automatically over authenticated SSE,
   with polling fallback, reconnect recovery, and a compact connection indicator.
 - Preserve drafts, focus, scroll position, filters, and expanded panels while
@@ -14,8 +15,15 @@
 - Append capture updates without replacing saved images or live cameras; update
   video progress and frame-rate hints while retaining duration drafts and
   automatic downloads only for requests made in the current tab.
+- Use configured printer names and readable marker descriptions throughout
+  session pages and the library while retaining original protocol records.
 - Add browser regression checks and SSE streaming/deadline coverage, with
   documented public-host verification for the next Cloudflare Tunnel deployment.
+
+MP4 downloads use the current display name without rebuilding existing videos.
+The database upgrades automatically to schema 3. Earlier versions cannot open
+the upgraded database; retain a pre-upgrade data backup if rollback is needed.
+No slicer snippet changes are required when upgrading from 1.2.0.
 
 ## 1.2.0
 
