@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Select multiple sessions on the current library page to
+  permanently delete closed sessions after confirmation. Report partial results,
+  preserve selection through live updates, and reconcile lost responses without
+  automatically replaying actions. Native forms remain available without JavaScript.
+
 ## 1.3.0
 
 - Add editable session display names with original-name fallback, live updates,

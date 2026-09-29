@@ -274,6 +274,25 @@ the first image's even-sized canvas if the camera resolution changes.
 The output is H.264/yuv420p MP4 with fast-start metadata. CPU encoding uses the
 `veryfast` preset, CRF 20, two encoder threads, and one worker by default.
 
+## Selecting multiple sessions
+
+Use the checkboxes in the print library to select closed sessions, or choose
+**Select all on this page**. Selection stays on the current page and clears when
+you change pages or printer filters. Live updates retain selections for sessions
+still on that page; new arrivals are never selected automatically.
+
+Choose **Delete selected** and confirm the selected count to permanently remove
+those sessions, including their snapshots and videos. Active sessions must be
+closed individually first. Captures, queued/running video jobs, and downloads
+continue to protect sessions against deletion.
+
+Bulk actions report each blocked or failed session and process the others.
+Successful selections clear; remaining selections can be reviewed before retrying.
+If the response is lost, the browser checks the submitted sessions before enabling
+another attempt and never automatically repeats the action. Individual checkbox
+selection and bulk actions also work without JavaScript; deletion then uses a
+confirmation page.
+
 ## Live updates and remote access
 
 The print library and session pages update automatically. A **Live** indicator
@@ -385,7 +404,7 @@ application-generated identifiers, never print names. One service owns a data
 directory; a process lock rejects a second instance.
 
 Nothing is removed automatically. To reclaim space, close a session, wait for
-its video jobs to finish, and delete it from its detail page. Deletion removes
+its video jobs to finish, and delete it from its detail page or the print library. Deletion removes
 that session's images, generated videos, and metadata permanently. Active
 captures, queued/running encoders, and in-progress downloads are protected
 against concurrent deletion. Monitor disk space on dockerpi: a full volume

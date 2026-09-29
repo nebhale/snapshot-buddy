@@ -148,7 +148,7 @@ class BuddyUpdates {
       const form = event.target.form;
       if (form?.buddyState?.conflict) buddyConflict(form);
     });
-    document.addEventListener("pointerdown", event => { this.pointerRow = event.target.closest(".session-row"); });
+    document.addEventListener("pointerdown", event => { this.pointerRow = event.target.closest(".session-entry,.session-row"); });
     const release = () => { this.pointerRow = null; setTimeout(() => this.flushDeferred(), 0); };
     document.addEventListener("pointerup", release); document.addEventListener("pointercancel", release);
     document.addEventListener("focusout", () => setTimeout(() => this.flushDeferred(), 0));
@@ -157,6 +157,8 @@ class BuddyUpdates {
     window.addEventListener("pagehide", () => this.stop());
     window.addEventListener("pageshow", event => { if (event.persisted) this.start(); });
     window.addEventListener("focus", () => { if (this.auth && !document.hidden) { this.auth = false; this.start(); } });
+    const bulkForm = document.getElementById("bulk-form");
+    if (bulkForm && window.BuddyBulk) this.bulk = new window.BuddyBulk(bulkForm, this);
     this.start();
   }
   connection(text) { this.status.textContent = text; }
@@ -257,10 +259,14 @@ class BuddyUpdates {
   apply(region) {
     const target = document.getElementById(region.id);
     if (!target) return;
+    if (this.bulk?.saving && ["library-list", "pagination"].includes(region.id)) { this.deferred.set(region.id, region); return; }
     if (region.id === "library-list" && (this.pointerRow || target.contains(document.activeElement))) { this.deferred.set(region.id, region); return; }
+    this.deferred.delete(region.id);
     const template = document.createElement("template"); template.innerHTML = region.html;
     const fresh = template.content.firstElementChild;
     if (!fresh || fresh.id !== region.id) return;
+    // Measure the layout with localized dates, including narrow library rows.
+    for (const time of fresh.querySelectorAll("time[datetime]")) { const text = formatTimestamp(time.dateTime); if (text) time.textContent = text; }
     const anchors = Array.from(document.querySelectorAll(".session-row,.section-card,[data-capture]")).map(node => ({ node, rect: node.getBoundingClientRect() })).filter(({ rect }) => rect.bottom > 0 && rect.top < window.innerHeight);
     const scroll = window.scrollY;
     if (region.append) {
@@ -279,6 +285,8 @@ class BuddyUpdates {
     this.afterUpdate();
   }
   afterUpdate() {
+    this.bulk?.sync();
+    this.bulk?.recover();
     document.querySelectorAll('form[method="post"]').forEach(buddyFormState);
     for (const time of document.querySelectorAll("time[datetime]")) { const text = formatTimestamp(time.dateTime); if (text) time.textContent = text; }
     window.BuddyPicker?.enhance();
@@ -291,6 +299,7 @@ class BuddyUpdates {
     const form = event.target;
     if (form.method.toLowerCase() !== "post") return;
     event.preventDefault();
+    if (form === this.bulk?.form) { await this.bulk.submit(); return; }
     const state = buddyFormState(form);
     if (state.saving || state.unconfirmed || this.auth || this.removed || form.closest("[data-removed-draft]")) return;
     if (state.conflict) { buddyConflict(form); return; }

@@ -411,3 +411,167 @@ if (!snapshot) test('unassigned spool badges track saved assignments across tabs
   await screenshot(library, 'unassigned-archived-mobile');
   await page.close();
 });
+
+let bulkSequence = 0;
+async function bulkSessions(page, count = 2) {
+  const ids = [];
+  const printer = snapshot ? 'core-one' : 'c1';
+  for (let i = 0; i < count; i++) {
+    const title = `Bulk browser ${++bulkSequence}`;
+    await marker(page, `START ${printer} ${title}`);
+    await marker(page, snapshot ? `STOP ${printer} 1` : `STOP ${printer} 1 ${1000 + bulkSequence}`);
+    const row = page.locator('.session-row').filter({ hasText: title });
+    await row.waitFor();
+    ids.push((await row.getAttribute('href')).split('/').pop());
+  }
+  return ids;
+}
+function bulkBox(page, id) { return page.locator(`[data-session-select][value="${id}"]`); }
+async function singleBulkAction(page, id, action) {
+  const state = await (await page.request.get(`${address}/api/live?view=session&id=${id}`)).json();
+  const response = await page.request.post(`${address}/sessions/${id}/${action}`, {
+    headers: { Accept: 'application/json' }, form: { csrf: state.csrf, revision: String(state.revision ?? '') },
+  });
+  assert.equal(response.status(), 200);
+}
+
+test('bulk checkboxes support keyboard, select-all, and live selection reconciliation on mobile', { timeout: 45000 }, async t => {
+  const page = await pageFor(t, { mobile: true });
+  const ids = await bulkSessions(page);
+  await marker(page, `START ${snapshot ? 'core-one' : 'c1'} Bulk active`);
+  const activeRow = page.locator('.session-entry').filter({ hasText: 'Bulk active' });
+  await activeRow.waitFor();
+  assert.equal(await activeRow.locator('input[type=checkbox]').isDisabled(), true);
+  const box = bulkBox(page, ids[0]);
+  await box.focus(); await page.keyboard.press('Space');
+  assert.equal(new URL(page.url()).pathname, '/');
+  assert.equal(await box.isChecked(), true);
+  assert.equal(await page.locator('[data-select-all]').evaluate(n => n.indeterminate), true);
+  await page.locator('[data-select-all]').check();
+  const eligible = await page.locator('[data-session-select][data-eligible=true]').count();
+  assert.equal(await page.locator('[data-session-select]:checked').count(), eligible);
+  await page.getByRole('button', { name: 'Clear selection' }).click();
+  assert.equal(await page.locator('[data-session-select]:checked').count(), 0);
+  await bulkBox(page, ids[0]).check(); await bulkBox(page, ids[1]).check();
+  await page.locator('.filter select').focus();
+  const added = await bulkSessions(page, 1);
+  assert.equal(await bulkBox(page, ids[0]).isChecked(), true);
+  assert.equal(await bulkBox(page, ids[1]).isChecked(), true);
+  assert.equal(await bulkBox(page, added[0]).isChecked(), false);
+  await screenshot(page, 'bulk-selected-mobile');
+  await singleBulkAction(page, ids[0], snapshot ? 'delete' : 'archive');
+  await page.waitForFunction(id => !document.querySelector(`[data-session-select][value="${id}"]`), ids[0]);
+  assert.equal(await bulkBox(page, ids[1]).isChecked(), true);
+  assert.match(await page.locator('[data-selection-notice]').textContent(), /deselected/);
+  assert.equal(await page.locator('[data-selection-count]').textContent(), '1 selected');
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+});
+
+test('bulk actions confirm only deletion and restore archived sessions', { timeout: 45000 }, async t => {
+  const page = await pageFor(t);
+  const ids = await bulkSessions(page);
+  for (const id of ids) await bulkBox(page, id).check();
+  let writes = 0;
+  page.on('request', request => { if (request.method() === 'POST' && request.url().includes('/sessions/bulk/')) writes++; });
+  const action = page.locator('[data-bulk-submit]');
+  if (snapshot) {
+    page.once('dialog', dialog => { assert.match(dialog.message(), /2 selected sessions.*snapshots and videos/); dialog.dismiss(); });
+    await action.click();
+    assert.equal(writes, 0);
+    assert.equal(await page.locator('[data-session-select]:checked').count(), 2);
+    page.once('dialog', dialog => dialog.accept());
+  } else page.on('dialog', () => assert.fail('Archive and restore must not prompt'));
+  await action.click();
+  await page.waitForFunction(() => document.querySelector('[data-bulk-results]').textContent.includes('2 sessions'), null, { timeout: 5000 }).catch(async error => { t.diagnostic(await page.locator('[data-bulk-results]').textContent()); throw error; });
+  for (const id of ids) await page.waitForFunction(value => !document.querySelector(`[data-session-select][value="${value}"]`), id);
+  assert.equal(writes, 1);
+  assert.equal(await page.locator('[data-selection-count]').textContent(), '0 selected');
+  await screenshot(page, 'bulk-complete-desktop');
+  if (!snapshot) {
+    await page.getByRole('link', { name: 'View archived sessions' }).click();
+    for (const id of ids) await bulkBox(page, id).check();
+    await page.getByRole('button', { name: 'Restore selected', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('[data-bulk-results]').textContent.includes('2 sessions restored.'));
+    for (const id of ids) await page.waitForFunction(value => !document.querySelector(`[data-session-select][value="${value}"]`), id);
+    assert.equal(writes, 2);
+  }
+});
+
+test('bulk partial results retain only failed selections and explain the failure', { timeout: 30000 }, async t => {
+  const page = await pageFor(t);
+  const ids = await bulkSessions(page);
+  for (const id of ids) await bulkBox(page, id).check();
+  await page.route('**/sessions/bulk/*', async route => {
+    await singleBulkAction(page, ids[0], snapshot ? 'delete' : 'archive');
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      summary: `1 session ${snapshot ? 'deleted' : 'archived'}. 1 could not be processed.`, location: '/', results: [
+        { id: ids[0], name: 'Completed session', status: 'success' },
+        { id: ids[1], name: 'Busy session', status: 'conflict', error: 'Wait for active work to finish.' },
+      ],
+    }) });
+  });
+  if (snapshot) page.once('dialog', dialog => dialog.accept());
+  await page.locator('[data-bulk-submit]').click();
+  await page.getByText('Busy session: Wait for active work to finish.', { exact: true }).waitFor();
+  await page.waitForFunction(id => !document.querySelector(`[data-session-select][value="${id}"]`), ids[0]);
+  assert.equal(await bulkBox(page, ids[1]).isChecked(), true);
+  assert.equal(await page.locator('[data-selection-count]').textContent(), '1 selected');
+  assert.equal(await page.locator('[data-bulk-submit]').isEnabled(), true);
+});
+
+test('bulk lost responses reconcile submitted sessions without replay', { timeout: 45000 }, async t => {
+  const page = await pageFor(t);
+  const ids = await bulkSessions(page);
+  for (const id of ids) await bulkBox(page, id).check();
+  let writes = 0;
+  await page.route('**/sessions/bulk/*', async route => {
+    writes++;
+    const response = await route.fetch();
+    assert.equal(response.status(), 200);
+    await page.context().setOffline(true);
+    await route.abort('failed');
+  });
+  if (snapshot) page.once('dialog', dialog => dialog.accept());
+  await page.locator('[data-bulk-submit]').click();
+  await page.waitForFunction(() => Boolean(window.buddyUpdates.bulk.unconfirmed));
+  assert.equal(await page.locator('[data-bulk-submit]').isDisabled(), true);
+  await page.context().setOffline(false);
+  await page.waitForFunction(() => !window.buddyUpdates.bulk.unconfirmed);
+  assert.equal(writes, 1);
+  assert.equal(await page.locator('[data-selection-count]').textContent(), '0 selected');
+  assert.match(await page.locator('[data-bulk-results]').textContent(), /Review the remaining selection/);
+});
+
+test('bulk selection survives credential renewal and clears across pages and filters', { timeout: 60000 }, async t => {
+  const page = await pageFor(t);
+  const ids = await bulkSessions(page, snapshot ? 25 : 51);
+  await bulkBox(page, ids.at(-1)).check();
+  const token = await page.locator('#bulk-form [name=csrf]').inputValue();
+  await page.request.post(`${address}/demo/restart`);
+  await page.waitForFunction(old => document.querySelector('#bulk-form [name=csrf]').value !== old, token);
+  assert.equal(await bulkBox(page, ids.at(-1)).isChecked(), true);
+  await page.getByRole('link', { name: 'Older prints →' }).click();
+  assert.equal(await page.locator('[data-session-select]:checked').count(), 0);
+  await page.locator('[data-session-select][data-eligible=true]').first().check();
+  await page.locator('.filter select').selectOption(snapshot ? 'core-one' : 'c1');
+  await page.getByRole('button', { name: 'Filter', exact: true }).click();
+  assert.equal(await page.locator('[data-session-select]:checked').count(), 0);
+  assert.equal(Number(new URL(page.url()).searchParams.get('page')), 0);
+});
+
+test('bulk native forms work without JavaScript and retain deletion confirmation', { timeout: 45000 }, async t => {
+  const setup = await pageFor(t);
+  const ids = await bulkSessions(setup);
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  t.after(() => context.close());
+  const page = await context.newPage(); await page.goto(address);
+  for (const id of ids) await bulkBox(page, id).check();
+  await page.locator('[data-bulk-submit]').click();
+  if (snapshot) {
+    await page.getByRole('heading', { name: 'Delete 2 selected sessions?' }).waitFor();
+    for (const id of ids) assert.equal((await setup.request.get(`${address}/api/sessions/${id}`)).status(), 200);
+    await page.getByRole('button', { name: 'Permanently delete selected sessions' }).click();
+  }
+  await page.getByText(`2 sessions ${snapshot ? 'deleted' : 'archived'}.`, { exact: true }).waitFor();
+  assert.equal(await page.locator('[data-session-select]:checked').count(), 0);
+});
