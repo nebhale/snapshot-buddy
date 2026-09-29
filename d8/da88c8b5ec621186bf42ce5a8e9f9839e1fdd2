@@ -1,0 +1,23 @@
+internal/buddy/web/pages.html
+  s_119bc38ec57a50::t_12e728253d0567 33
+internal/buddy/web/style.css
+  s_119bc38ec57a50::t_63be28e604508c 19,94-98,104-105,162,174-176,186
+scripts/browser.test.cjs
+  s_119bc38ec57a50::t_04be24cb830dc9 58,61,64-122,379-413
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "d8da88c8b5ec621186bf42ce5a8e9f9839e1fdd2",
+  "prompts": {},
+  "sessions": {
+    "s_119bc38ec57a50": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0e7ea-ebc6-7e21-a6eb-9b0f4a7ef20b",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Ben Hale <nebhale@nebhale.com>"
+    }
+  }
+}
