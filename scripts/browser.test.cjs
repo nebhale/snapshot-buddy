@@ -55,11 +55,70 @@ async function save(page, index = 0) {
   await form.getByRole('button', { name: 'Save spool', exact: true }).click();
   await page.waitForFunction(i => !document.querySelectorAll('.spool-form')[i].buddyState.saving, index);
 }
-async function screenshot(page, name) {
+async function screenshot(page, name, fullPage = false) {
   if (!process.env.BUDDY_SCREENSHOT_DIR) return;
   mkdirSync(process.env.BUDDY_SCREENSHOT_DIR, { recursive: true });
-  await page.screenshot({ path: path.join(process.env.BUDDY_SCREENSHOT_DIR, `${snapshot ? 'snapshot' : 'filament'}-${name}.png`) });
+  await page.screenshot({ fullPage, path: path.join(process.env.BUDDY_SCREENSHOT_DIR, `${snapshot ? 'snapshot' : 'filament'}-${name}.png`) });
 }
+
+test('shared page layouts fit desktop and mobile widths', { timeout: 45000 }, async t => {
+  const page = await pageFor(t);
+  const active = await page.locator('.session-row').nth(0).getAttribute('href');
+  const closed = await page.locator('.session-row').nth(1).getAttribute('href');
+  const pages = [['library', '/'], ['setup', '/setup'], ['session-active', active], ['session-closed', closed], ['error', '/sessions/missing']];
+  if (!snapshot) pages.push(['archived', '/?archived=true']);
+  for (const [size, viewport] of [['desktop', { width: 1280, height: 900 }], ['mobile', { width: 390, height: 844 }]]) {
+    await page.setViewportSize(viewport);
+    for (const [name, pathname] of pages) {
+      await page.goto(address + pathname);
+      if (!['setup', 'error'].includes(name)) await page.waitForFunction(() => document.getElementById('connection-state').textContent === 'Live');
+      await page.locator('h1').waitFor();
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${name} fits ${size}`);
+      await screenshot(page, `review-${name}-${size}`);
+      await screenshot(page, `review-${name}-${size}-full`, true);
+    }
+  }
+});
+
+test('compact session layout keeps primary content in the first viewport', { timeout: 30000 }, async t => {
+  const page = await pageFor(t); await session(page);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await screenshot(page, 'session-compact-desktop');
+  const firstBottom = await page.locator(snapshot ? '.frame-card' : '.section-card').first().evaluate(n => n.getBoundingClientRect().bottom);
+  t.diagnostic(`First ${snapshot ? 'snapshot' : 'section'} ends at ${Math.round(firstBottom)}px`);
+  if (!snapshot) assert.ok(firstBottom <= 720, `first section ends at ${firstBottom}px`);
+  else assert.ok(firstBottom <= 800, `first snapshot ends at ${firstBottom}px`);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  if (!snapshot) {
+    const secondBottom = await page.locator('.section-card').nth(1).evaluate(n => n.getBoundingClientRect().bottom);
+    t.diagnostic(`Second section ends at ${Math.round(secondBottom)}px`);
+    assert.ok(secondBottom <= 900, `second section ends at ${secondBottom}px`);
+    const form = page.locator('.spool-form').first();
+    const input = await form.getByRole('combobox').evaluate(n => n.getBoundingClientRect().toJSON());
+    const save = await form.getByRole('button', { name: 'Save spool', exact: true }).evaluate(n => n.getBoundingClientRect().toJSON());
+    assert.ok(save.left >= input.right && save.top < input.bottom && save.bottom > input.top, 'save sits beside search');
+  }
+  await page.locator('.name-edit summary').click();
+  const editor = await page.locator('.name-form').evaluate(n => n.getBoundingClientRect().toJSON());
+  const metadata = await page.locator('#session-heading .lede').evaluate(n => n.getBoundingClientRect().toJSON());
+  assert.ok(editor.top >= metadata.bottom, 'expanded name editor sits below metadata');
+  await page.locator('.name-edit summary').click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await screenshot(page, 'session-compact-mobile');
+  if (!snapshot) {
+    await page.locator('.weight-edit summary').first().click();
+    await page.getByLabel('Override grams (blank restores reported weight)').first().fill('23.5');
+    assert.equal(await page.getByRole('button', { name: 'Save weight', exact: true }).first().isVisible(), true);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    const plain = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
+    t.after(() => plain.close());
+    const fallback = await plain.newPage(); await fallback.goto(page.url());
+    assert.equal(await fallback.locator('.spool-form select').first().isVisible(), true);
+    assert.equal(await fallback.getByRole('button', { name: 'Save spool', exact: true }).first().isEnabled(), true);
+    assert.equal(await fallback.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  }
+});
 
 test('new prints update automatically while filters, focus, and camera nodes survive', { timeout: 30000 }, async t => {
   const page = await pageFor(t);
@@ -316,4 +375,39 @@ test('display names update every view, retain drafts, and resolve concurrent edi
   assert.equal(snapshot ? record.name : record.Name, original);
   assert.equal(snapshot ? record.display_name : record.DisplayName, 'Finished vase');
   await other.close(); await library.close();
+});
+
+if (!snapshot) test('unassigned spool badges track saved assignments across tabs', { timeout: 30000 }, async t => {
+  const library = await pageFor(t);
+  const catalog = await library.request.post(`${address}/demo/catalog`, { data: [{ ID: 7, Label: '#7 · Purple PLA', Color: '8844aa' }] });
+  assert.equal(catalog.status(), 204);
+  const title = 'Unassigned spool indicators';
+  await marker(library, `START c1 ${title}`);
+  const row = library.locator('.session-row').filter({ hasText: title });
+  await row.locator('.unassigned-spools').waitFor();
+  assert.equal(await row.locator('.unassigned-spools').textContent(), '1 unassigned');
+  const page = await library.context().newPage();
+  await page.goto(address + await row.getAttribute('href'));
+  await page.waitForSelector('[role=combobox]');
+  await choose(page, 0, 'purple', 7);
+  assert.equal(await page.locator('#summary .unassigned-spools').textContent(), '1 unassigned', 'drafts do not clear the saved warning');
+  await save(page);
+  await page.locator('#summary .unassigned-spools').waitFor({ state: 'detached' });
+  await row.locator('.unassigned-spools').waitFor({ state: 'detached' });
+  await page.getByRole('button', { name: '+ Prepare next section' }).click();
+  await page.locator('#summary .unassigned-spools').waitFor();
+  await choose(page, 0, '', 0); await save(page);
+  await library.waitForFunction(name => [...document.querySelectorAll('.session-row')].find(n => n.textContent.includes(name))?.querySelector('.unassigned-spools')?.textContent === '2 unassigned', title);
+  assert.equal(await page.locator('#summary .unassigned-spools').textContent(), '2 unassigned');
+  await marker(page, 'STOP c1 1 12000');
+  await page.getByRole('button', { name: 'Archive session', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Archive session', exact: true }).click();
+  await library.goto(address + '/?archived=true');
+  await row.locator('.unassigned-spools').waitFor();
+  assert.equal(await row.locator('.unassigned-spools').textContent(), '2 unassigned');
+  await screenshot(library, 'unassigned-archived-desktop');
+  await library.setViewportSize({ width: 390, height: 844 });
+  assert.equal(await library.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await screenshot(library, 'unassigned-archived-mobile');
+  await page.close();
 });
