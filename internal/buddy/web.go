@@ -35,6 +35,11 @@ type Web struct {
 }
 
 type Page struct {
+	BulkAction               string
+	Bulk                     *bulkReply
+	Selected                 map[string]bool
+	Confirm                  []bulkItem
+	ReturnURL                string
 	Title, View, CSRF, Error string
 	Printers                 []PrinterStatus
 	Sessions                 []Session
@@ -80,6 +85,7 @@ func NewWeb(s *Service) (http.Handler, error) {
 	mux.HandleFunc("GET /setup", w.setup)
 	mux.HandleFunc("GET /api/live", w.live)
 	mux.HandleFunc("GET /api/events", func(rw http.ResponseWriter, r *http.Request) { serveEvents(rw, r, &s.Store.changes, w.csrf) })
+	mux.HandleFunc("POST /sessions/bulk/delete", w.bulkSessions)
 	mux.HandleFunc("GET /sessions/{id}", w.session)
 	mux.HandleFunc("POST /sessions/{id}/name", w.renameSession)
 	mux.HandleFunc("POST /sessions/{id}/close", w.closeSession)
@@ -184,28 +190,13 @@ func (w *Web) fail(rw http.ResponseWriter, err error) {
 }
 
 func (w *Web) dashboard(rw http.ResponseWriter, r *http.Request) {
-	p := Page{Title: "Print library", View: "dashboard", Filter: r.URL.Query().Get("printer")}
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	page = max(0, min(page, 1000000))
-	p.Page, p.Previous = page, max(0, page-1)
-	var err error
-	p.Printers, err = w.service.Status()
+	p, err := w.libraryPage(r.URL.Query())
 	if err != nil {
 		w.fail(rw, err)
 		return
-	}
-	p.Sessions, err = w.service.Store.Sessions(p.Filter, 25, page*24)
-	if err != nil {
-		w.fail(rw, err)
-		return
-	}
-	if len(p.Sessions) > 24 {
-		p.Next = page + 1
-		p.Sessions = p.Sessions[:24]
 	}
 	w.render(rw, 200, p)
 }
-
 func (w *Web) setup(rw http.ResponseWriter, r *http.Request) {
 	p := Page{Title: "Printer setup", View: "setup"}
 	for _, printer := range w.service.Config.Printers {
