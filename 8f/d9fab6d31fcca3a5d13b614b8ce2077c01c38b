@@ -1,0 +1,68 @@
+internal/buddy/web/setup.js
+  s_60bd33365157f3::t_81043039d0d8fb 1-77
+README.md
+  s_60bd33365157f3::t_f1113cb717bdd0 23-26,284-286
+  s_60bd33365157f3::t_83a64cf4bea9ee 127
+  s_60bd33365157f3::t_81043039d0d8fb 128-130
+internal/buddy/web/app.js
+  s_60bd33365157f3::t_8668cce4e650ff 66-69
+internal/buddy/web/style.css
+  s_60bd33365157f3::t_81043039d0d8fb 142,221-265
+  s_60bd33365157f3::t_d6a57347facbda 95,134-135,183-185,188-189,192,194,198-199,203,206,211-215
+  s_60bd33365157f3::t_defe8ad64c6f02 117
+  s_60bd33365157f3::t_7ad359f4f7225d 220
+  s_60bd33365157f3::t_29f7dc2ecd23f0 33
+  s_60bd33365157f3::t_9ac4f6325e8bfa 178-182,186-187,190-191,193,195
+  s_60bd33365157f3::t_047446998cf6c1 72,200-202
+  s_60bd33365157f3::t_3a80e3cbaac111 124
+scripts/browser.test.cjs
+  s_60bd33365157f3::t_dc01161754ae52 149,153-154,158-169,171-173,177-180,182-187,190-191,199-240
+  s_60bd33365157f3::t_ad1b4778aeef48 493-495,497-502
+  s_60bd33365157f3::t_6e58d5d2a3f19f 484-492,496,503-528
+  s_60bd33365157f3::t_95c8370e2e280c 728-769
+  s_60bd33365157f3::t_29f7dc2ecd23f0 876,881
+  s_60bd33365157f3::t_f1113cb717bdd0 47-50,52,61,257-260,262-263,268-269,361,363,398,529-605,625,628,632,646,648-649,652-653,681,772,805,826,837,860,875,877-878,889,898-899,915-920
+  s_60bd33365157f3::t_954ad6860b995c 88-148
+  s_60bd33365157f3::t_8668cce4e650ff 150-152,155-157,170,174-176,181,188-189,192-198,241-242,901-904
+internal/buddy/web/bulk.js
+  s_60bd33365157f3::t_d6a57347facbda 14-22,37,42,44-51,66-69,72-76,85
+  s_60bd33365157f3::t_047446998cf6c1 43,65,70-71,103
+internal/buddy/web/pages.html
+  s_60bd33365157f3::t_047446998cf6c1 8-9,48
+  s_60bd33365157f3::t_defe8ad64c6f02 20,41
+  s_60bd33365157f3::t_f1113cb717bdd0 3,7,18-19,35,37-38,46
+  s_60bd33365157f3::t_81043039d0d8fb 2,24-30
+  s_60bd33365157f3::t_1db881d328b383 43
+  s_60bd33365157f3::t_d3f3719d3a0a0e 15
+CHANGELOG.md
+  s_60bd33365157f3::t_1e4e6ba2a5306b 3,5-15,21
+  s_60bd33365157f3::t_e0c15b168768cf 22
+internal/buddy/web.go
+  s_60bd33365157f3::t_d6a57347facbda 41
+internal/buddy/buddy_test.go
+  s_60bd33365157f3::t_81043039d0d8fb 621
+internal/buddy/web/updates.js
+  s_60bd33365157f3::t_047446998cf6c1 17,43,161-162,165-187,270-273,291,321,329-335,363-364,383
+CONTRIBUTING.md
+  s_60bd33365157f3::t_1e4e6ba2a5306b 95-98
+internal/buddy/bulk.go
+  s_60bd33365157f3::t_d6a57347facbda 34,156
+internal/buddy/web/name.js
+  s_60bd33365157f3::t_37bd76a6c3eb95 1-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "8fd9fab6d31fcca3a5d13b614b8ce2077c01c38b",
+  "prompts": {},
+  "sessions": {
+    "s_60bd33365157f3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f32b-f226-7c71-a5e7-1f33ef62dafc",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Ben Hale <nebhale@nebhale.com>"
+    }
+  }
+}
