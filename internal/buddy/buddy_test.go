@@ -618,7 +618,7 @@ func TestSetupCopiesLabeledSnippets(t *testing.T) {
 			}
 		}
 	}
-	steps := regexp.MustCompile(`<span class="step">(\d+)</span><h3>([^<]+)</h3>`).FindAllStringSubmatch(w.Body.String(), -1)
+	steps := regexp.MustCompile(`<span class="step-number" aria-hidden="true">(\d+)</span>[^<]*</p><h3>([^<]+)</h3>`).FindAllStringSubmatch(w.Body.String(), -1)
 	if len(steps) != len(blocks) {
 		t.Fatal("missing numbered snippet headings")
 	}

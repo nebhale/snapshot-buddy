@@ -38,27 +38,6 @@ const toast = (message) => {
   target.classList.add("visible");
   setTimeout(() => target.classList.remove("visible"), 2500);
 };
-document.querySelectorAll("[data-copy]").forEach((button) => {
-  button.addEventListener("click", async () => {
-    const pre = document.getElementById(button.dataset.copy);
-    try {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(pre.textContent);
-      } else {
-        const selection = window.getSelection();
-        const range = document.createRange();
-        range.selectNodeContents(pre);
-        selection.removeAllRanges();
-        selection.addRange(range);
-        if (!document.execCommand("copy")) throw new Error("Select and copy");
-        selection.removeAllRanges();
-      }
-      toast("G-code copied");
-    } catch {
-      toast("Select the G-code and copy it with your browser");
-    }
-  });
-});
 function updateVideoRate() {
  const form = document.querySelector("#video-form");
  if (!form) return;
@@ -84,3 +63,7 @@ function downloadRequestedVideo() {
   }
 }
 downloadRequestedVideo();
+
+document.querySelectorAll(".filter select").forEach(select => {
+  select.addEventListener("change", () => select.form.requestSubmit());
+});

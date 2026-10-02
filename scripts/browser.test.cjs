@@ -44,7 +44,12 @@ async function marker(page, value) {
   assert.equal(response.status(), 204);
 }
 async function session(page) { await page.locator('.session-row').first().click(); await page.waitForFunction(() => document.getElementById('connection-state').textContent === 'Live'); }
+async function editSpool(page, index = 0) {
+  const form = page.locator('.spool-form').nth(index);
+  if (!(await form.getByRole('combobox').isVisible())) await form.locator('.spool-edit').click();
+}
 async function choose(page, index, query, id) {
+  await editSpool(page, index);
   const form = page.locator('.spool-form').nth(index);
   await form.getByRole('combobox').fill(query);
   await form.locator(`[role=option][data-value="${id}"]`).click();
@@ -53,7 +58,7 @@ async function choose(page, index, query, id) {
 async function save(page, index = 0) {
   const form = page.locator('.spool-form').nth(index);
   await form.getByRole('button', { name: 'Save spool', exact: true }).click();
-  await page.waitForFunction(i => !document.querySelectorAll('.spool-form')[i].buddyState.saving, index);
+  await page.waitForFunction(i => !document.querySelectorAll('.spool-form')[i].buddyPicker.editing, index);
 }
 async function screenshot(page, name, fullPage = false) {
   if (!process.env.BUDDY_SCREENSHOT_DIR) return;
@@ -80,6 +85,161 @@ test('shared page layouts fit desktop and mobile widths', { timeout: 45000 }, as
   }
 });
 
+test('setup exposes complete Start, End, and third blocks with exact copying', { timeout: 30000 }, async t => {
+  const page = await pageFor(t);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.testClipboard = text; } } });
+  });
+  const plain = await browser.newContext({ javaScriptEnabled: false });
+  t.after(() => plain.close());
+  const fallback = await plain.newPage(); await fallback.goto(address + '/setup');
+  assert.equal(await fallback.locator('.printer-choice').isVisible(), false);
+  const original = await fallback.locator('.setup-printer').evaluateAll(panels => panels.map(panel => ({
+    id: panel.id, codes: [...panel.querySelectorAll('pre')].map(pre => ({ id: pre.id, text: pre.textContent })),
+  })));
+  for (const panel of await fallback.locator('.setup-printer').all()) assert.equal(await panel.isVisible(), true);
+  for (const code of await fallback.locator('pre').all()) assert.equal(await code.isVisible(), true);
+  const titles = ['Start G-code', 'End G-code', snapshot ? 'After layer change G-code' : 'Color change G-code'];
+  for (const printer of original) {
+    await page.goto(address + '/setup#' + printer.id);
+    assert.equal(await page.locator('#setup-printer').inputValue(), printer.id);
+    const panel = page.locator('.setup-printer:visible');
+    assert.equal(await panel.count(), 1);
+    assert.deepEqual(await panel.locator('h3').allTextContents(), titles);
+    assert.deepEqual(await panel.locator('.step-number').allTextContents(), ['01', '02', '03']);
+    assert.equal(await page.getByText('What happens next', { exact: true }).count(), 0);
+    for (const [i, code] of printer.codes.entries()) {
+      const pre = panel.locator('pre').nth(i);
+      assert.equal(await pre.isVisible(), true);
+      assert.equal(await pre.textContent(), code.text);
+      await panel.locator('[data-copy]').nth(i).click();
+      await page.waitForFunction(text => window.testClipboard === text, code.text);
+    }
+    assert.ok(await panel.locator('.command').count());
+    assert.ok(await panel.locator('.comment').count());
+    for (const width of [1440, 768, 390, 320]) {
+      await page.setViewportSize({ width, height: 1000 });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      assert.equal(await panel.locator('pre').evaluateAll(nodes => nodes.every(node => node.scrollHeight === node.clientHeight && node.scrollWidth === node.clientWidth)), true, 'complete code is visible without internal scrolling');
+      await screenshot(page, 'setup-' + printer.id + '-' + width, true);
+    }
+  }
+  if (original.length > 1) {
+    await page.goto(address + '/setup');
+    await page.evaluate(() => { window.setupDocument = true; });
+    await page.locator('#setup-printer').selectOption(original[1].id);
+    assert.equal(await page.locator('.setup-printer:visible').getAttribute('id'), original[1].id);
+    assert.equal(new URL(page.url()).hash, '#' + original[1].id);
+    assert.equal(await page.evaluate(() => window.setupDocument), true);
+    await page.goBack();
+    assert.equal(await page.locator('#setup-printer').inputValue(), original[0].id);
+    await page.goForward();
+    assert.equal(await page.locator('#setup-printer').inputValue(), original[1].id);
+    await page.reload();
+    assert.equal(await page.locator('.setup-printer:visible').getAttribute('id'), original[1].id);
+  }
+  await page.evaluate(() => { navigator.clipboard.writeText = async () => { throw new Error('Unavailable'); }; });
+  const panel = page.locator('.setup-printer:visible');
+  const expected = await panel.locator('pre').first().textContent();
+  await panel.locator('[data-copy]').first().click();
+  await page.waitForFunction(text => window.getSelection().toString() === text, expected);
+  assert.equal(await panel.locator('[data-copy]').first().textContent(), 'Copy manually');
+});
+
+test('printer filters update in place and retain the library view', { timeout: 30000 }, async t => {
+  const page = await pageFor(t);
+  for (const archived of snapshot ? [false] : [false, true]) {
+    await page.goto(address + (archived ? '/?archived=true' : '/'));
+    await page.evaluate(() => { window.filterDocument = {}; window.filterVideo = document.querySelector('video'); });
+    const identity = await page.evaluateHandle(() => window.filterDocument);
+    const allSessions = await page.locator('.session-row').evaluateAll(rows => rows.map(row => row.getAttribute('href')));
+    const printers = await page.locator('.filter option').evaluateAll(options => options.filter(option => option.value).map(option => ({ id: option.value, name: option.textContent })));
+    assert.equal(await page.getByRole('button', { name: 'Filter', exact: true }).count(), 0);
+    for (const width of [1440, 390, 320]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const [filter, select] = await page.locator('.library-controls').evaluate(node => [...node.querySelectorAll('select,[data-selection-toggle]')].map(item => {
+        const rect = item.getBoundingClientRect(); return { top: rect.top, right: rect.right, left: rect.left, height: rect.height, fontSize: getComputedStyle(item).fontSize, fontWeight: getComputedStyle(item).fontWeight };
+      }));
+      assert.equal(filter.height, select.height);
+      assert.equal(filter.top, select.top);
+      assert.equal(filter.fontSize, select.fontSize);
+      assert.equal(filter.fontWeight, select.fontWeight);
+      assert.equal(select.left - filter.right, 8);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    }
+    for (const printer of printers) {
+      await page.locator('.filter select').selectOption(printer.id);
+      await page.waitForFunction(() => !window.buddyUpdates.filtering);
+      assert.equal(new URL(page.url()).searchParams.get('printer'), printer.id);
+      assert.equal(await page.locator('.filter select').inputValue(), printer.id);
+      assert.equal(new URL(page.url()).searchParams.get('archived') === 'true', archived);
+      assert.ok((await page.locator('.session-main p').allTextContents()).every(text => text.includes(printer.name)));
+      assert.equal(await page.locator('#bulk-form input[name=printer]').inputValue(), printer.id);
+      assert.equal(new URL(await page.locator('[data-selection-toggle]').getAttribute('href'), address).searchParams.get('printer'), printer.id);
+      await page.locator('.filter select').selectOption('');
+      await page.waitForFunction(() => !window.buddyUpdates.filtering);
+      assert.equal(new URL(page.url()).searchParams.get('archived') === 'true', archived);
+      assert.deepEqual(await page.locator('.session-row').evaluateAll(rows => rows.map(row => row.getAttribute('href'))), allSessions);
+      await page.goBack();
+      await page.waitForFunction(id => !window.buddyUpdates.filtering && document.querySelector('.filter select').value === id, printer.id);
+      assert.ok((await page.locator('.session-main p').allTextContents()).every(text => text.includes(printer.name)));
+      await page.goForward();
+      await page.waitForFunction(() => !window.buddyUpdates.filtering && document.querySelector('.filter select').value === '');
+      assert.deepEqual(await page.locator('.session-row').evaluateAll(rows => rows.map(row => row.getAttribute('href'))), allSessions);
+    }
+    assert.equal(await page.evaluate(value => value === window.filterDocument, identity), true, 'filtering and history retain the document');
+    assert.equal(await page.evaluate(() => window.filterVideo === document.querySelector('video')), true, 'filtering retains the live camera');
+  }
+  const plain = await browser.newContext({ javaScriptEnabled: false });
+  t.after(() => plain.close());
+  const fallback = await plain.newPage(); await fallback.goto(address);
+  await fallback.locator('.filter select').selectOption(snapshot ? 'core-one' : 'c1');
+  await fallback.getByRole('button', { name: 'Filter', exact: true }).click();
+  assert.equal(new URL(fallback.url()).searchParams.get('printer'), snapshot ? 'core-one' : 'c1');
+});
+
+test('rapid filter changes and reconnect discard stale session lists', { timeout: 30000 }, async t => {
+  const page = await pageFor(t);
+  await page.waitForFunction(() => !window.buddyUpdates.fetching);
+  const allSessions = await page.locator('.session-row').evaluateAll(rows => rows.map(row => row.getAttribute('href')));
+  const printer = snapshot ? 'core-one' : 'c1';
+  let release, received;
+  const blocked = new Promise(resolve => { received = resolve; });
+  const hold = new Promise(resolve => { release = resolve; });
+  t.after(() => release());
+  let delay = true;
+  await page.route('**/api/live?**', async route => {
+    if (delay && new URL(route.request().url()).searchParams.get('printer') === printer) {
+      delay = false;
+      const response = await route.fetch(); received();
+      await hold;
+      await route.fulfill({ response });
+    } else await route.continue();
+  });
+  await page.locator('.filter select').selectOption(printer);
+  await blocked;
+  assert.equal(await page.locator('#library-list').getAttribute('aria-busy'), 'true');
+  assert.equal(await page.getByRole('button', { name: 'Select', exact: true }).getAttribute('aria-disabled'), 'true');
+  await page.locator('.filter select').selectOption('');
+  await page.waitForFunction(() => !window.buddyUpdates.filtering);
+  release();
+  await page.waitForFunction(() => !window.buddyUpdates.fetching);
+  assert.deepEqual(await page.locator('.session-row').evaluateAll(rows => rows.map(row => row.getAttribute('href'))), allSessions);
+  assert.equal(await page.locator('.filter select').inputValue(), '');
+  await page.unroute('**/api/live?**');
+  await page.route('**/api/live?**', route => route.abort());
+  await page.evaluate(() => { window.filterDocument = true; });
+  await page.locator('.filter select').selectOption(printer);
+  await page.waitForFunction(() => document.getElementById('connection-state').textContent.includes('Disconnected'));
+  assert.equal(await page.locator('#library-list').getAttribute('aria-busy'), 'true');
+  assert.equal(await page.evaluate(() => window.filterDocument), true);
+  await page.unroute('**/api/live?**');
+  await page.waitForFunction(() => !window.buddyUpdates.filtering);
+  assert.equal(await page.locator('#library-list').getAttribute('aria-busy'), null);
+  const label = await page.locator('.filter select option:checked').textContent();
+  assert.ok((await page.locator('.session-main p').allTextContents()).every(text => text.includes(label)));
+});
+
 test('compact session layout keeps primary content in the first viewport', { timeout: 30000 }, async t => {
   const page = await pageFor(t); await session(page);
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -94,23 +254,23 @@ test('compact session layout keeps primary content in the first viewport', { tim
     t.diagnostic(`Second section ends at ${Math.round(secondBottom)}px`);
     assert.ok(secondBottom <= 900, `second section ends at ${secondBottom}px`);
     const form = page.locator('.spool-form').first();
-    const input = await form.getByRole('combobox').evaluate(n => n.getBoundingClientRect().toJSON());
+    assert.equal(await form.getByRole('combobox').isVisible(), false);
+    assert.equal(await form.getByRole('button', { name: 'Save spool', exact: true }).isVisible(), false);
+    await editSpool(page);
+    const picker = await form.locator('.spool-picker').evaluate(n => n.getBoundingClientRect().toJSON());
     const save = await form.getByRole('button', { name: 'Save spool', exact: true }).evaluate(n => n.getBoundingClientRect().toJSON());
-    assert.ok(save.left >= input.right && save.top < input.bottom && save.bottom > input.top, 'save sits beside search');
+    assert.ok(save.top >= picker.bottom, 'save sits below the inline picker');
+    await form.getByRole('button', { name: 'Cancel', exact: true }).click();
   }
   await page.locator('.name-edit summary').click();
   const editor = await page.locator('.name-form').evaluate(n => n.getBoundingClientRect().toJSON());
   const metadata = await page.locator('#session-heading .lede').evaluate(n => n.getBoundingClientRect().toJSON());
-  assert.ok(editor.top >= metadata.bottom, 'expanded name editor sits below metadata');
-  await page.locator('.name-edit summary').click();
+  assert.ok(editor.bottom <= metadata.top, 'inline name editor replaces the title above metadata');
+  await page.getByRole('link', { name: 'Cancel', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await screenshot(page, 'session-compact-mobile');
   if (!snapshot) {
-    await page.locator('.weight-edit summary').first().click();
-    await page.getByLabel('Override grams (blank restores reported weight)').first().fill('23.5');
-    assert.equal(await page.getByRole('button', { name: 'Save weight', exact: true }).first().isVisible(), true);
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     const plain = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
     t.after(() => plain.close());
     const fallback = await plain.newPage(); await fallback.goto(page.url());
@@ -198,8 +358,9 @@ if (snapshot) {
 } else {
   test('drafts survive unrelated changes and same-field conflicts can be resolved explicitly', { timeout: 45000 }, async t => {
     const page = await pageFor(t); await session(page);
-    const other = await page.context().newPage(); await other.goto(page.url()); await other.waitForSelector('[role=combobox]');
+    const other = await page.context().newPage(); await other.goto(page.url()); await other.waitForSelector('[role=combobox]', { state: 'attached' });
     const searchOnly = page.locator('.spool-form').first().getByRole('combobox');
+    await editSpool(page);
     await searchOnly.fill('galaxy');
     await choose(other, 0, 'purple', 7); await save(other);
     await page.waitForFunction(() => document.querySelector('.spool-form select').value === '7');
@@ -234,6 +395,7 @@ if (snapshot) {
     assert.equal(response.status(), 204);
     await page.waitForFunction(() => window.BuddyPicker.spools.some(s => s.ID === 88));
     const form = page.locator('.spool-form').first(); const input = form.getByRole('combobox');
+    await editSpool(page);
     await input.fill('retired');
     assert.equal(await form.locator('[role=option][data-value="77"]').count(), 0);
     await form.getByLabel('Include archived').check();
@@ -319,6 +481,128 @@ test('library insertion and removal keep a surviving visible row anchored', { ti
   assert.ok(Math.abs(await survivor.evaluate(n => n.getBoundingClientRect().top) - visible[1].top) < 2);
 });
 
+test('opening and cancelling the title editor preserves vertical layout', { timeout: 45000 }, async t => {
+  const page = await pageFor(t);
+  const printer = snapshot ? 'core-one' : 'c1';
+  const positions = target => target.evaluate(() => ['#session-heading .eyebrow', '.session-name', '#session-heading .lede', '#summary', '#manage', 'footer'].map(selector => {
+    const rect = document.querySelector(selector).getBoundingClientRect();
+    return { selector, top: rect.top + scrollY, height: rect.height };
+  }));
+  for (const title of ['House', 'Workshop storage trays and camera accessories with a very long session name that wraps onto multiple lines on smaller screens']) {
+    await page.goto(address);
+    const original = title.length > 20 ? 'Long title layout' : title;
+    await marker(page, `START ${printer} ${original}`);
+    await page.locator('.session-row').filter({ hasText: original }).click();
+    await page.waitForFunction(() => document.getElementById('connection-state').textContent === 'Live');
+    if (title !== original) {
+      await page.getByRole('button', { name: 'Edit session name', exact: true }).click();
+      await page.getByLabel('Display name', { exact: true }).fill(title);
+      await page.getByRole('button', { name: 'Save name', exact: true }).click();
+      await page.waitForFunction(value => document.querySelector('h1').textContent === value && !document.querySelector('.name-edit').open, title);
+    }
+    for (const width of [1440, 768, 680, 390, 320]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const before = await positions(page);
+      await page.getByRole('button', { name: 'Edit session name', exact: true }).click();
+      const input = page.getByLabel('Display name', { exact: true });
+      assert.deepEqual(await positions(page), before, `${width}px editor preserves layout for ${title}`);
+      await input.fill('An unsaved draft');
+      assert.deepEqual(await positions(page), before, 'typing preserves layout');
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      if (title === 'House' && [1440, 390].includes(width)) await screenshot(page, `name-edit-stable-${width}`);
+      await input.press('Escape');
+      assert.deepEqual(await positions(page), before, 'Escape restores the title without movement');
+      await page.getByRole('button', { name: 'Edit session name', exact: true }).click();
+      await page.getByRole('link', { name: 'Cancel', exact: true }).click();
+      assert.deepEqual(await positions(page), before, 'Cancel restores the title without movement');
+    }
+    const plain = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 1000 } });
+    try {
+      const native = await plain.newPage(); await native.goto(page.url());
+      const before = await positions(native);
+      await native.getByRole('button', { name: 'Edit session name', exact: true }).click();
+      assert.deepEqual(await positions(native), before, 'native editor preserves layout');
+    } finally { await plain.close(); }
+  }
+});
+
+test('inline name editing supports keyboard, cancellation, failed saves, and native forms', { timeout: 30000 }, async t => {
+  const page = await pageFor(t);
+  const original = 'Inline name editing';
+  await marker(page, `START ${snapshot ? 'core-one' : 'c1'} ${original}`);
+  await page.locator('.session-row').filter({ hasText: original }).click();
+  await page.waitForFunction(() => document.getElementById('connection-state').textContent === 'Live');
+  const pencil = page.getByRole('button', { name: 'Edit session name', exact: true });
+  const input = page.getByLabel('Display name', { exact: true });
+  const heading = await page.locator('h1').boundingBox();
+  const icon = await pencil.boundingBox();
+  assert.ok(icon.x >= heading.x + heading.width && icon.x - heading.x - heading.width <= 12, 'pencil sits beside the name');
+  await pencil.focus(); await pencil.press('Enter');
+  assert.equal(await input.inputValue(), '');
+  assert.equal(await input.getAttribute('placeholder'), original);
+  assert.equal(await input.evaluate(n => n.matches(':placeholder-shown')), true);
+  assert.equal(await input.evaluate(n => n === document.activeElement && n.selectionStart === 0 && n.selectionEnd === n.value.length), true);
+  await input.fill('Discard with Escape'); await input.press('Escape');
+  assert.equal(await page.locator('.name-edit').evaluate(n => n.open), false);
+  assert.equal(await pencil.evaluate(n => n === document.activeElement), true);
+  await pencil.click(); await input.fill('Discard with Cancel');
+  await page.getByRole('link', { name: 'Cancel', exact: true }).click();
+  assert.equal(await page.locator('h1').textContent(), original);
+  assert.equal(await page.locator('.name-edit').evaluate(n => n.open), false);
+
+  await pencil.click(); await input.fill('Saved with Enter'); await input.press('Enter');
+  await page.waitForFunction(() => document.querySelector('h1').textContent === 'Saved with Enter' && !document.querySelector('.name-edit').open);
+  assert.equal(await pencil.evaluate(n => n === document.activeElement), true);
+  await pencil.click();
+  assert.equal(await input.inputValue(), 'Saved with Enter');
+  await input.fill('');
+  assert.equal(await input.getAttribute('placeholder'), original);
+  assert.equal(await input.evaluate(n => n.matches(':placeholder-shown')), true);
+  await input.press('Enter');
+  await page.waitForFunction(name => document.querySelector('h1').textContent === name && !document.querySelector('.name-edit').open, original);
+  const stored = await (await page.request.get(`${address}/api/sessions/${page.url().split('/').pop()}`)).json();
+  assert.equal((snapshot ? stored.display_name : stored.DisplayName) ?? '', '');
+  await pencil.click();
+  assert.equal(await input.inputValue(), '', 'opening the default name must not create a custom override');
+  await input.fill('Keep after failure');
+  await page.route('**/sessions/*/name', route => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Save failed for test' }) }));
+  await input.press('Enter');
+  await page.getByText('Save failed for test', { exact: true }).waitFor();
+  assert.equal(await input.inputValue(), 'Keep after failure');
+  assert.equal(await page.locator('.name-edit').evaluate(n => n.open), true);
+  await page.unroute('**/sessions/*/name');
+
+  let release;
+  const held = new Promise(resolve => { release = resolve; });
+  await page.route('**/sessions/*/name', async route => { await held; await route.continue(); });
+  await input.fill('First submitted draft'); await input.press('Enter');
+  await page.waitForFunction(() => document.querySelector('.name-form').buddyState.saving);
+  await input.fill('Continue typing during save');
+  release();
+  await page.waitForFunction(() => document.querySelector('h1').textContent === 'First submitted draft' && !document.querySelector('.name-form').buddyState.saving);
+  assert.equal(await input.inputValue(), 'Continue typing during save');
+  assert.equal(await page.locator('.name-edit').evaluate(n => n.open), true);
+  await input.press('Escape');
+  assert.equal(await page.locator('h1').textContent(), 'First submitted draft');
+  await page.unroute('**/sessions/*/name');
+
+  const plain = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
+  t.after(() => plain.close());
+  const fallback = await plain.newPage(); await fallback.goto(page.url());
+  await fallback.getByRole('button', { name: 'Edit session name', exact: true }).click();
+  await fallback.getByLabel('Display name', { exact: true }).fill('Saved without JavaScript');
+  await fallback.getByRole('button', { name: 'Save name', exact: true }).click();
+  assert.equal(await fallback.locator('h1').textContent(), 'Saved without JavaScript');
+  await fallback.getByRole('button', { name: 'Edit session name', exact: true }).click();
+  const plainInput = fallback.getByLabel('Display name', { exact: true });
+  await plainInput.fill('');
+  assert.equal(await plainInput.getAttribute('placeholder'), original);
+  assert.equal(await plainInput.evaluate(n => n.matches(':placeholder-shown')), true);
+  await fallback.getByRole('button', { name: 'Save name', exact: true }).click();
+  assert.equal(await fallback.locator('h1').textContent(), original);
+  assert.equal(await fallback.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+});
+
 test('display names update every view, retain drafts, and resolve concurrent edits', { timeout: 45000 }, async t => {
   const page = await pageFor(t);
   const original = 'Browser display name';
@@ -338,12 +622,14 @@ test('display names update every view, retain drafts, and resolve concurrent edi
   assert.equal(await page.getByLabel('Display name', { exact: true }).inputValue(), 'My draft');
   assert.equal(await page.getByLabel('Display name', { exact: true }).evaluate(n => n === document.activeElement), true);
   const saveName = async (target, value) => {
+    if (!(await target.locator('.name-edit').evaluate(n => n.open))) await target.locator('.name-edit summary').click();
     await target.getByLabel('Display name', { exact: true }).fill(value);
     await target.getByRole('button', { name: 'Save name', exact: true }).click();
-    await target.waitForFunction(name => document.querySelector('h1').textContent === name, value.trim() || original);
+    await target.waitForFunction(name => document.querySelector('h1').textContent === name && !document.querySelector('.name-edit').open, value.trim() || original);
   };
   const saved = 'Garden <vase> & café 🌿';
   await saveName(other, saved);
+  assert.equal(await other.getByRole('button', { name: 'Edit session name', exact: true }).evaluate(n => n === document.activeElement), true);
   await page.getByRole('button', { name: 'Use saved value', exact: true }).waitFor();
   assert.equal(await page.getByLabel('Display name', { exact: true }).inputValue(), 'My draft');
   assert.ok((await page.locator('.name-form .form-message').textContent()).includes(saved));
@@ -357,10 +643,14 @@ test('display names update every view, retain drafts, and resolve concurrent edi
   await page.getByRole('button', { name: 'Save my value', exact: true }).click();
   await page.waitForFunction(name => document.querySelector('h1').textContent === name, mine);
   await other.waitForFunction(name => document.querySelector('h1').textContent === name, mine);
-  assert.equal(await page.locator('.name-edit').getAttribute('open'), '');
+  await page.waitForFunction(() => !document.querySelector('.name-edit').open);
   await screenshot(page, 'display-name-desktop');
+  await page.locator('.name-edit summary').click();
+  await screenshot(page, 'display-name-edit-desktop');
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await screenshot(page, 'display-name-edit-mobile');
+  await page.getByLabel('Display name', { exact: true }).press('Escape');
   await screenshot(page, 'display-name-mobile');
   await saveName(page, '');
   await other.waitForFunction(name => document.querySelector('h1').textContent === name, original);
@@ -388,7 +678,7 @@ if (!snapshot) test('unassigned spool badges track saved assignments across tabs
   assert.equal(await row.locator('.unassigned-spools').textContent(), '1 unassigned');
   const page = await library.context().newPage();
   await page.goto(address + await row.getAttribute('href'));
-  await page.waitForSelector('[role=combobox]');
+  await page.waitForSelector('[role=combobox]', { state: 'attached' });
   await choose(page, 0, 'purple', 7);
   assert.equal(await page.locator('#summary .unassigned-spools').textContent(), '1 unassigned', 'drafts do not clear the saved warning');
   await save(page);
@@ -435,8 +725,51 @@ async function singleBulkAction(page, id, action) {
   assert.equal(response.status(), 200);
 }
 
+test('bulk selection mode reveals checkboxes and cancellation clears them without writes', { timeout: 45000 }, async t => {
+  const page = await pageFor(t);
+  assert.equal(await page.locator('[data-session-select]').first().isVisible(), false);
+  assert.equal(await page.locator('[data-select-all]').isVisible(), false);
+  assert.equal(await page.locator('[data-bulk-submit]').isVisible(), false);
+  const ids = await bulkSessions(page);
+  assert.equal(await bulkBox(page, ids[0]).isVisible(), false, 'live arrivals remain outside selection mode');
+  let writes = 0;
+  page.on('request', request => { if (request.method() === 'POST' && request.url().includes('/sessions/bulk/')) writes++; });
+  const toggle = page.locator('[data-selection-toggle]');
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await screenshot(page, `bulk-browse-${width}`);
+    assert.equal(await toggle.textContent(), 'Select');
+    assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+    assert.equal(await bulkBox(page, ids[0]).evaluate(n => n.closest('.session-select').getBoundingClientRect().width), 0);
+    await toggle.focus(); await toggle.press('Space');
+    assert.equal(await toggle.textContent(), 'Cancel');
+    assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
+    assert.equal(await bulkBox(page, ids[0]).isVisible(), true);
+    const centers = await page.evaluate(() => ['[data-select-all]', '[data-session-select]'].map(selector => {
+      const rect = document.querySelector(selector).getBoundingClientRect(); return rect.x + rect.width / 2;
+    }));
+    assert.ok(Math.abs(centers[0] - centers[1]) < 1);
+    await bulkBox(page, ids[0]).check();
+    await screenshot(page, `bulk-selection-${width}`);
+    assert.equal(await page.locator('[data-selection-count]').textContent(), '1 selected');
+    await toggle.click();
+    assert.equal(await bulkBox(page, ids[0]).isVisible(), false);
+    assert.equal(await page.locator('[data-session-select]:checked').count(), 0);
+    assert.equal(await page.locator('[data-bulk-submit]').isVisible(), false);
+    await toggle.press('Enter');
+    await bulkBox(page, ids[0]).check();
+    await bulkBox(page, ids[0]).press('Escape');
+    assert.equal(await toggle.textContent(), 'Select');
+    assert.equal(await toggle.evaluate(n => n === document.activeElement), true);
+    assert.equal(await page.locator('[data-session-select]:checked').count(), 0);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  }
+  assert.equal(writes, 0);
+});
+
 test('bulk checkboxes support keyboard, select-all, and live selection reconciliation on mobile', { timeout: 45000 }, async t => {
   const page = await pageFor(t, { mobile: true });
+  await page.getByRole('button', { name: 'Select', exact: true }).click();
   const ids = await bulkSessions(page);
   await marker(page, `START ${snapshot ? 'core-one' : 'c1'} Bulk active`);
   const activeRow = page.locator('.session-entry').filter({ hasText: 'Bulk active' });
@@ -469,6 +802,7 @@ test('bulk checkboxes support keyboard, select-all, and live selection reconcili
 
 test('bulk actions confirm only deletion and restore archived sessions', { timeout: 45000 }, async t => {
   const page = await pageFor(t);
+  await page.getByRole('button', { name: 'Select', exact: true }).click();
   const ids = await bulkSessions(page);
   for (const id of ids) await bulkBox(page, id).check();
   let writes = 0;
@@ -489,6 +823,7 @@ test('bulk actions confirm only deletion and restore archived sessions', { timeo
   await screenshot(page, 'bulk-complete-desktop');
   if (!snapshot) {
     await page.getByRole('link', { name: 'View archived sessions' }).click();
+    await page.getByRole('button', { name: 'Select', exact: true }).click();
     for (const id of ids) await bulkBox(page, id).check();
     await page.getByRole('button', { name: 'Restore selected', exact: true }).click();
     await page.waitForFunction(() => document.querySelector('[data-bulk-results]').textContent.includes('2 sessions restored.'));
@@ -499,6 +834,7 @@ test('bulk actions confirm only deletion and restore archived sessions', { timeo
 
 test('bulk partial results retain only failed selections and explain the failure', { timeout: 30000 }, async t => {
   const page = await pageFor(t);
+  await page.getByRole('button', { name: 'Select', exact: true }).click();
   const ids = await bulkSessions(page);
   for (const id of ids) await bulkBox(page, id).check();
   await page.route('**/sessions/bulk/*', async route => {
@@ -521,6 +857,7 @@ test('bulk partial results retain only failed selections and explain the failure
 
 test('bulk lost responses reconcile submitted sessions without replay', { timeout: 45000 }, async t => {
   const page = await pageFor(t);
+  await page.getByRole('button', { name: 'Select', exact: true }).click();
   const ids = await bulkSessions(page);
   for (const id of ids) await bulkBox(page, id).check();
   let writes = 0;
@@ -535,8 +872,13 @@ test('bulk lost responses reconcile submitted sessions without replay', { timeou
   await page.locator('[data-bulk-submit]').click();
   await page.waitForFunction(() => Boolean(window.buddyUpdates.bulk.unconfirmed));
   assert.equal(await page.locator('[data-bulk-submit]').isDisabled(), true);
+  assert.equal(await page.locator('[data-selection-toggle]').getAttribute('aria-disabled'), 'true');
+  assert.equal(await page.locator('.filter select').isDisabled(), true);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#bulk-form').evaluate(n => n.hasAttribute('data-selecting')), true);
   await page.context().setOffline(false);
   await page.waitForFunction(() => !window.buddyUpdates.bulk.unconfirmed);
+  assert.equal(await page.locator('.filter select').isEnabled(), true);
   assert.equal(writes, 1);
   assert.equal(await page.locator('[data-selection-count]').textContent(), '0 selected');
   assert.match(await page.locator('[data-bulk-results]').textContent(), /Review the remaining selection/);
@@ -544,6 +886,7 @@ test('bulk lost responses reconcile submitted sessions without replay', { timeou
 
 test('bulk selection survives credential renewal and clears across pages and filters', { timeout: 60000 }, async t => {
   const page = await pageFor(t);
+  await page.getByRole('button', { name: 'Select', exact: true }).click();
   const ids = await bulkSessions(page, snapshot ? 25 : 51);
   await bulkBox(page, ids.at(-1)).check();
   const token = await page.locator('#bulk-form [name=csrf]').inputValue();
@@ -552,9 +895,13 @@ test('bulk selection survives credential renewal and clears across pages and fil
   assert.equal(await bulkBox(page, ids.at(-1)).isChecked(), true);
   await page.getByRole('link', { name: 'Older prints →' }).click();
   assert.equal(await page.locator('[data-session-select]:checked').count(), 0);
+  assert.equal(await page.locator('[data-session-select]').first().isVisible(), false);
+  await page.getByRole('button', { name: 'Select', exact: true }).click();
   await page.locator('[data-session-select][data-eligible=true]').first().check();
-  await page.locator('.filter select').selectOption(snapshot ? 'core-one' : 'c1');
-  await page.getByRole('button', { name: 'Filter', exact: true }).click();
+  await Promise.all([
+    page.waitForURL(url => url.searchParams.get('printer') === (snapshot ? 'core-one' : 'c1') && !url.searchParams.has('page')),
+    page.locator('.filter select').selectOption(snapshot ? 'core-one' : 'c1'),
+  ]);
   assert.equal(await page.locator('[data-session-select]:checked').count(), 0);
   assert.equal(Number(new URL(page.url()).searchParams.get('page')), 0);
 });
@@ -565,6 +912,12 @@ test('bulk native forms work without JavaScript and retain deletion confirmation
   const context = await browser.newContext({ javaScriptEnabled: false });
   t.after(() => context.close());
   const page = await context.newPage(); await page.goto(address);
+  assert.equal(await bulkBox(page, ids[0]).isVisible(), false);
+  await page.getByRole('button', { name: 'Select', exact: true }).click();
+  assert.equal(new URL(page.url()).searchParams.has('csrf'), false);
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  assert.equal(await bulkBox(page, ids[0]).isVisible(), false);
+  await page.getByRole('button', { name: 'Select', exact: true }).click();
   for (const id of ids) await bulkBox(page, id).check();
   await page.locator('[data-bulk-submit]').click();
   if (snapshot) {

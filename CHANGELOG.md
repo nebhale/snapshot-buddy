@@ -1,11 +1,24 @@
 # Changelog
 
-## Unreleased
+## 1.4.0
 
+- Simplify session pages with pencil-based inline naming, original-name
+  placeholders, stable editor layouts, and compact timelapse and session controls.
+- Reveal bulk-selection checkboxes only after choosing Select, align selection
+  controls, and show action results beside them.
+- Filter sessions immediately when choosing a printer, without reloading the page
+  or interrupting live cameras; preserve browser Back and Forward navigation.
+- Show complete, syntax-colored setup G-code alongside concise explanations and
+  paste locations, ordered Start, End, then After layer change. Switch printers
+  without reloading and copy each generated block exactly.
+- Remove redundant labels and explanations, unify Snapshot Buddy icons, and
+  improve spacing and typography across desktop and mobile layouts.
 - Select multiple sessions on the current library page to
   permanently delete closed sessions after confirmation. Report partial results,
   preserve selection through live updates, and reconcile lost responses without
   automatically replaying actions. Native forms remain available without JavaScript.
+
+No slicer snippet changes are required for this release.
 
 ## 1.3.0
 
