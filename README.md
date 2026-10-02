@@ -20,9 +20,10 @@ runs on the camera and no camera SD card is needed.
 
 ![Session snapshots and timelapse export with synthetic demonstration data](docs/images/session.png)
 
-Open a session and choose **Edit display name** to give it a more useful name.
-This works for active and past sessions. Leave the field blank to restore the
-original name. Custom names appear in the library, printer card, and session
+Open a session and select the pencil beside its name to edit it inline. Press
+Enter or choose **Save name** to save; Escape or **Cancel** discards the draft.
+This works for active and past sessions. The original name appears as the
+placeholder when the field is empty. Save it blank to restore that name. Custom names appear in the library, printer card, and session
 page; the original name and received printer markers remain in the record.
 Names are local to each Buddy app, so edits in one app do not rename the other.
 MP4 downloads use the current display name, including videos created before
@@ -123,6 +124,10 @@ proxy alone does not relay WebRTC media. See [go2rtc WebRTC configuration](https
 ## Slicer setup
 
 The **Printer setup** page generates these blocks using your configuration.
+Select a printer to see its Start, End, and After layer change blocks,
+with the complete G-code shown beside a short explanation and paste location.
+Copy buttons preserve the generated text exactly.
+
 They leave your existing extrusion and movement commands intact. Remove any
 previous timelapse integration blocks when switching to Snapshot Buddy.
 Each block includes BEGIN/END comments identifying Snapshot Buddy, the action,
@@ -276,8 +281,9 @@ The output is H.264/yuv420p MP4 with fast-start metadata. CPU encoding uses the
 
 ## Selecting multiple sessions
 
-Use the checkboxes in the print library to select closed sessions, or choose
-**Select all on this page**. Selection stays on the current page and clears when
+Choose **Select** in the print library to reveal the checkboxes, then select
+closed sessions or choose **Select all on this page**. **Cancel** clears the
+selection and hides the checkboxes. Selection stays on the current page and clears when
 you change pages or printer filters. Live updates retain selections for sessions
 still on that page; new arrivals are never selected automatically.
 

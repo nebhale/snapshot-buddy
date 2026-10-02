@@ -92,9 +92,10 @@ sufficient.
 
 ## Live browser verification
 
-The shared `web/updates.js` transport and reconciler intentionally match in both
-Buddy repositories. Keep changes and their regression tests aligned. The server
-owns rendered presentation; the browser owns drafts and interaction. Notifications
+The shared `web/updates.js` transport and reconciler, `web/name.js` inline
+editor, and `web/setup.js` setup controls intentionally match in both Buddy
+repositories. Keep changes and their regression tests aligned. The server owns
+rendered presentation; the browser owns drafts and interaction. Notifications
 are invalidations, not commands or mutation acknowledgments.
 
 CI runs `scripts/browser.test.cjs` against isolated loopback demos with synthetic

@@ -11,7 +11,15 @@ class BuddyBulk {
     this.button = form.querySelector('[data-bulk-submit]');
     this.count = form.querySelector('[data-selection-count]');
     this.results = form.querySelector('[data-bulk-results]');
-    form.querySelector('[data-bulk-enhanced]').hidden = false;
+    this.toggle = form.querySelector('[data-selection-toggle]');
+    this.selecting = form.hasAttribute('data-selecting') || this.selected.size > 0;
+    this.toggle.addEventListener('click', event => { event.preventDefault(); this.setSelecting(!this.selecting); });
+    this.toggle.addEventListener('keydown', event => {
+      if (event.key === ' ') { event.preventDefault(); this.toggle.click(); }
+    });
+    form.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && this.selecting) { event.preventDefault(); this.setSelecting(false); }
+    });
     // Native POST results use this URL for subsequent live reads and pagination.
     window.history.replaceState(window.history.state, "", form.dataset.libraryUrl);
     form.addEventListener('change', event => {
@@ -26,11 +34,21 @@ class BuddyBulk {
     });
     this.clear.addEventListener('click', () => { this.selected.clear(); this.sync(); });
     window.addEventListener('pageshow', event => {
-      if (event.persisted && !this.saving && !this.unconfirmed) { this.selected.clear(); this.sync(); }
+      if (event.persisted && !this.saving && !this.unconfirmed) this.setSelecting(false);
     });
     this.sync();
   }
   boxes() { return Array.from(this.form.querySelectorAll('[data-session-select]')); }
+  setSelecting(value) {
+    if (this.saving || this.unconfirmed || this.updates.auth || this.updates.filtering) return;
+    this.selecting = value;
+    if (!value) {
+      this.selected.clear();
+      this.form.querySelector('[data-selection-notice]').hidden = true;
+    }
+    this.sync();
+    this.toggle.focus({ preventScroll: true });
+  }
   sync() {
     const boxes = this.boxes();
     const eligible = boxes.filter(box => box.dataset.eligible === 'true');
@@ -44,7 +62,18 @@ class BuddyBulk {
       notice.textContent = `${removed} selected ${removed === 1 ? 'session is' : 'sessions are'} no longer selectable on this page and were deselected.`;
       notice.hidden = false;
     }
-    const locked = Boolean(this.saving || this.unconfirmed || this.updates.auth);
+    const locked = Boolean(this.saving || this.unconfirmed || this.updates.auth || this.updates.filtering);
+    this.form.toggleAttribute('data-selecting', this.selecting);
+    this.toggle.textContent = this.selecting ? 'Cancel' : 'Select';
+    this.toggle.setAttribute('aria-expanded', String(this.selecting));
+    this.toggle.setAttribute('aria-disabled', String(locked));
+    const filter = this.form.querySelector('.filter select');
+    filter.disabled = Boolean(this.saving || this.unconfirmed || this.updates.auth);
+    const location = new URL(this.form.dataset.libraryUrl, window.location.href);
+    location.searchParams.set('page', this.form.querySelector('[name="page"]').value);
+    if (!this.selecting) location.searchParams.set('select', 'true');
+    this.toggle.href = location.pathname + location.search;
+    this.all.closest('[data-bulk-enhanced]').hidden = !this.selecting;
     for (const box of boxes) {
       box.checked = this.selected.has(box.value);
       box.disabled = locked || box.dataset.eligible !== 'true';
@@ -53,7 +82,7 @@ class BuddyBulk {
     this.all.checked = eligible.length > 0 && eligible.every(box => this.selected.has(box.value));
     this.all.indeterminate = this.selected.size > 0 && !this.all.checked;
     this.count.textContent = `${this.selected.size} selected`;
-    this.form.querySelector('.bulk-actions').hidden = this.selected.size === 0;
+    this.form.querySelector('.bulk-actions').hidden = !this.selecting || this.selected.size === 0;
     this.clear.hidden = this.selected.size === 0;
     this.clear.disabled = locked;
     this.button.disabled = locked || this.selected.size === 0;
@@ -71,7 +100,7 @@ class BuddyBulk {
     this.results.hidden = false;
   }
   async submit() {
-    if (this.saving || this.unconfirmed || this.updates.auth) return;
+    if (!this.selecting || this.saving || this.unconfirmed || this.updates.auth || this.updates.filtering) return;
     this.sync();
     if (!this.selected.size) return;
     const items = this.boxes().filter(box => this.selected.has(box.value)).map(box => ({

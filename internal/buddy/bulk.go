@@ -31,6 +31,7 @@ var bulkIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
 func (w *Web) libraryPage(values url.Values) (Page, error) {
 	p := Page{View: "dashboard", Title: "Print library", Filter: values.Get("printer"), BulkAction: "delete"}
+	p.Selecting = values.Get("select") == "true"
 	p.Page, _ = strconv.Atoi(values.Get("page"))
 	p.Page = max(0, min(1000000, p.Page))
 	p.Previous = max(0, p.Page-1)
@@ -152,6 +153,7 @@ func (w *Web) bulkSessions(rw http.ResponseWriter, r *http.Request) {
 		p = Page{View: "bulk-result", Title: "Session results", ReturnURL: reply.Location}
 	}
 	p.Bulk, p.Selected = &reply, selected
+	p.Selecting = true
 	rw.Header().Set("Content-Location", reply.Location)
 	w.render(rw, 200, p)
 }

@@ -38,6 +38,7 @@ type Page struct {
 	BulkAction               string
 	Bulk                     *bulkReply
 	Selected                 map[string]bool
+	Selecting                bool
 	Confirm                  []bulkItem
 	ReturnURL                string
 	Title, View, CSRF, Error string

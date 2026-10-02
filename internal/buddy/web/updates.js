@@ -12,10 +12,9 @@ function buddyKey(node) {
 function buddyValue(field) {
   if (!field) return "";
   if (field.name === "display_name") return field.value.trim();
-  if (field.name === "grams" && field.value !== "" && Number.isFinite(Number(field.value))) return String(Number(field.value));
   return field.value;
 }
-function buddyEditable(form) { return form.querySelector('[name="spool"], [name="grams"], [name="duration"], [name="display_name"]'); }
+function buddyEditable(form) { return form.querySelector('[name="spool"], [name="duration"], [name="display_name"]'); }
 function buddyFormState(form) {
   if (!form.buddyState) {
     const field = buddyEditable(form);
@@ -41,7 +40,7 @@ function buddyConflict(form) {
   const field = buddyEditable(form);
   const key = JSON.stringify([state.latest, buddyValue(field)]);
   if (form.querySelector(':scope > .form-message')?.buddyConflictKey === key) return;
-  const label = (value) => field.name === "display_name" ? (value || "Original name") : field.name === "spool" ? (window.BuddyPicker?.label(value) || `Spool #${value}`) : value === "" ? "Reported weight" : `${value} g`;
+  const label = (value) => field.name === "display_name" ? (value || "Original name") : field.name === "spool" ? (window.BuddyPicker?.label(value) || `Spool #${value}`) : value;
   const message = buddyMessage(form, `Saved value: ${label(state.latest)}. Your edit: ${label(buddyValue(field))}. `);
   message.buddyConflictKey = key;
   for (const [text, mine] of [["Use saved value", false], ["Save my value", true]]) {
@@ -159,7 +158,32 @@ class BuddyUpdates {
     window.addEventListener("focus", () => { if (this.auth && !document.hidden) { this.auth = false; this.start(); } });
     const bulkForm = document.getElementById("bulk-form");
     if (bulkForm && window.BuddyBulk) this.bulk = new window.BuddyBulk(bulkForm, this);
+    this.filter = document.querySelector(".filter select");
+    if (this.filter) window.addEventListener("popstate", () => this.filterLibrary(new URL(window.location.href), false));
     this.start();
+  }
+  filterLibrary(url, push = true) {
+    if (this.bulk.saving || this.bulk.unconfirmed || this.auth) {
+      const current = new URL(this.bulk.form.dataset.libraryUrl, window.location.href);
+      this.filter.value = current.searchParams.get("printer") || "";
+      if (!push) window.history.replaceState(window.history.state, "", current);
+      return;
+    }
+    if (push && url.href !== window.location.href) window.history.pushState(null, "", url);
+    this.filter.value = url.searchParams.get("printer") || "";
+    this.bulk.form.dataset.libraryUrl = url.pathname + url.search;
+    this.bulk.form.querySelector('input[name="printer"]').value = this.filter.value;
+    this.bulk.form.querySelector('input[name="page"]').value = url.searchParams.get("page") || "0";
+    this.bulk.selected.clear(); this.bulk.selecting = false;
+    this.bulk.results.hidden = true;
+    this.bulk.form.querySelector('[data-selection-notice]').hidden = true;
+    // Discard responses and deferred rows from the previous filter.
+    this.generation++; this.controller?.abort(); this.deferred.clear();
+    delete this.known["library-list"]; delete this.known.pagination;
+    this.filtering = true;
+    document.getElementById("library-list").setAttribute("aria-busy", "true");
+    this.bulk.sync();
+    this.refresh();
   }
   connection(text) { this.status.textContent = text; }
   stop() {
@@ -243,6 +267,10 @@ class BuddyUpdates {
           if (!state.conflict) buddyMessage(form, "Current state refreshed. Review the saved value before submitting again.");
         }
       }
+      if (this.filtering) {
+        this.filtering = false;
+        document.getElementById("library-list").removeAttribute("aria-busy");
+      }
       this.afterUpdate();
       this.connection(this.streaming ? "Live" : "Updating every 3 seconds");
       this.root.dispatchEvent(new CustomEvent("buddy:updated"));
@@ -260,7 +288,7 @@ class BuddyUpdates {
     const target = document.getElementById(region.id);
     if (!target) return;
     if (this.bulk?.saving && ["library-list", "pagination"].includes(region.id)) { this.deferred.set(region.id, region); return; }
-    if (region.id === "library-list" && (this.pointerRow || target.contains(document.activeElement))) { this.deferred.set(region.id, region); return; }
+    if (region.id === "library-list" && !this.filtering && (this.pointerRow || target.contains(document.activeElement))) { this.deferred.set(region.id, region); return; }
     this.deferred.delete(region.id);
     const template = document.createElement("template"); template.innerHTML = region.html;
     const fresh = template.content.firstElementChild;
@@ -290,6 +318,7 @@ class BuddyUpdates {
     document.querySelectorAll('form[method="post"]').forEach(buddyFormState);
     for (const time of document.querySelectorAll("time[datetime]")) { const text = formatTimestamp(time.dateTime); if (text) time.textContent = text; }
     window.BuddyPicker?.enhance();
+    window.BuddyName?.sync();
     if (typeof updateVideoRate === "function") updateVideoRate();
     if (typeof downloadRequestedVideo === "function") downloadRequestedVideo();
     const title = document.querySelector("title[data-app-name]");
@@ -297,6 +326,13 @@ class BuddyUpdates {
   }
   async submit(event) {
     const form = event.target;
+    if (form === this.filter?.form) {
+      event.preventDefault();
+      const url = new URL(form.action);
+      url.search = new URLSearchParams(new FormData(form)).toString();
+      this.filterLibrary(url);
+      return;
+    }
     if (form.method.toLowerCase() !== "post") return;
     event.preventDefault();
     if (form === this.bulk?.form) { await this.bulk.submit(); return; }
@@ -324,6 +360,8 @@ class BuddyUpdates {
         throw new Error(data.error || (response.status === 403 ? "Page credentials changed. Review your edit and save again." : "Unable to save. Review the current state and try again."));
       }
       state.base = submitted; state.conflict = false;
+      window.BuddyName?.saved(form, submitted);
+      window.BuddyPicker?.saved(form, submitted);
       buddyMessage(form, "Saved");
       if (data.location) {
         const url = new URL(data.location, window.location.href);
@@ -342,6 +380,7 @@ class BuddyUpdates {
     } finally {
       state.saving = false;
       if (!state.unconfirmed) state.restoreButtons();
+      window.BuddyPicker?.sync(form);
       this.known = {}; await this.refresh();
     }
   }
