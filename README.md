@@ -257,7 +257,7 @@ attempts. It maps each saved frame to its archive filename. No full archive is
 buffered in memory or retained on disk.
 
 **Create video** defaults to **10 seconds**, configurable in YAML, and accepts
-a length from 1–3600 seconds (millisecond precision).
+a length from 1–3600 seconds in whole-second increments.
 For 450 frames and 15 seconds, the result uses 30 fps. For 3 frames and 15
 seconds, each frame lasts 5 seconds. Every saved frame appears once, in order,
 with no audio, overlays, interpolation, or title cards. Very short lengths
